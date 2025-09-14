@@ -2,11 +2,11 @@ import '../../stylus/components/_tooltips.styl'
 
 // Mixins
 import Colorable from '../../mixins/colorable'
-import Delayable from '../../mixins/delayable'
 import Dependent from '../../mixins/dependent'
 import Detachable from '../../mixins/detachable'
 import Menuable from '../../mixins/menuable'
 import Toggleable from '../../mixins/toggleable'
+import useDelayable from '../../composables/useDelayable'
 
 // Helpers
 import { convertToUnit, getSlotType } from '../../util/helpers'
@@ -16,7 +16,7 @@ import { consoleError } from '../../util/console'
 export default {
   name: 'v-tooltip',
 
-  mixins: [Colorable, Delayable, Dependent, Detachable, Menuable, Toggleable],
+  mixins: [Colorable, Dependent, Detachable, Menuable, Toggleable],
 
   props: {
     closeDelay: {
@@ -44,6 +44,10 @@ export default {
     zIndex: {
       default: null
     }
+  },
+
+  setup (props) {
+    return useDelayable(props)
   },
 
   data: () => ({

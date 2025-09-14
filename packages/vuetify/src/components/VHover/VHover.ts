@@ -1,6 +1,6 @@
 // Mixins
-import Delayable from '../../mixins/delayable'
 import Toggleable from '../../mixins/toggleable'
+import useDelayable from '../../composables/useDelayable'
 
 // Utilities
 import mixins from '../../util/mixins'
@@ -10,7 +10,6 @@ import { consoleWarn } from '../../util/console'
 import { VNode, ScopedSlotChildren } from 'vue/types/vnode'
 
 export default mixins(
-  Delayable,
   Toggleable
   /* @vue/component */
 ).extend({
@@ -24,7 +23,19 @@ export default mixins(
     value: {
       type: Boolean,
       default: undefined
+    },
+    openDelay: {
+      type: [Number, String],
+      default: 0
+    },
+    closeDelay: {
+      type: [Number, String],
+      default: 0
     }
+  },
+
+  setup (props) {
+    return useDelayable(props)
   },
 
   methods: {
