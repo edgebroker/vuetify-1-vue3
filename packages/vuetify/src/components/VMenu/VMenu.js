@@ -3,13 +3,13 @@ import '../../stylus/components/_menus.styl'
 import Vue from 'vue'
 
 // Mixins
-import Delayable from '../../mixins/delayable'
 import Dependent from '../../mixins/dependent'
 import Detachable from '../../mixins/detachable'
 import Menuable from '../../mixins/menuable.js'
 import Returnable from '../../mixins/returnable'
 import Toggleable from '../../mixins/toggleable'
 import Themeable from '../../mixins/themeable'
+import useDelayable from '../../composables/useDelayable'
 
 // Component level mixins
 import Activator from './mixins/menu-activator'
@@ -45,7 +45,6 @@ export default Vue.extend({
   mixins: [
     Activator,
     Dependent,
-    Delayable,
     Detachable,
     Generators,
     Keyable,
@@ -76,6 +75,14 @@ export default Vue.extend({
     offsetX: Boolean,
     offsetY: Boolean,
     openOnHover: Boolean,
+    openDelay: {
+      type: [Number, String],
+      default: 0
+    },
+    closeDelay: {
+      type: [Number, String],
+      default: 0
+    },
     origin: {
       type: String,
       default: 'top left'
@@ -84,6 +91,10 @@ export default Vue.extend({
       type: [Boolean, String],
       default: 'v-menu-transition'
     }
+  },
+
+  setup (props) {
+    return useDelayable(props)
   },
 
   data () {

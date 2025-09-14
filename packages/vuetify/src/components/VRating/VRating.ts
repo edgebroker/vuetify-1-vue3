@@ -6,10 +6,10 @@ import VIcon from '../VIcon'
 
 // Mixins
 import Colorable from '../../mixins/colorable'
-import Delayable from '../../mixins/delayable'
 import Sizeable from '../../mixins/sizeable'
 import Rippleable from '../../mixins/rippleable'
 import Themeable from '../../mixins/themeable'
+import useDelayable from '../../composables/useDelayable'
 
 // Utilities
 import { createRange } from '../../util/helpers'
@@ -31,7 +31,6 @@ type ItemSlotProps = {
 /* @vue/component */
 export default mixins(
   Colorable,
-  Delayable,
   Rippleable,
   Sizeable,
   Themeable
@@ -71,7 +70,19 @@ export default mixins(
     value: {
       type: Number,
       default: 0
+    },
+    openDelay: {
+      type: [Number, String],
+      default: 0
+    },
+    closeDelay: {
+      type: [Number, String],
+      default: 0
     }
+  },
+
+  setup (props) {
+    return useDelayable(props)
   },
 
   data () {
