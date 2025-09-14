@@ -2,7 +2,7 @@
 
 ## Goal
 This repository is a fork of Vuetify 1.5.x.
-The goal is to migrate the codebase from Vue 2 (Options API + Mixins) to Vue 3 (Composition API + Composables).
+The goal is to migrate the codebase from Vue 2 (Options API + Mixins) to Vue 3 (Composition API + Composables) using TypeScript.
 
 ---
 
@@ -21,8 +21,8 @@ The old source tree will be removed after conversion.
 
 ## Conventions
 - **Mixins → Composables**
-  - Each mixin becomes a `useXyz.js` composable in `src/composables/`.
-  - Example: `colorable.ts` → `src/composables/useColorable.js`.
+  - Each mixin becomes a `useXyz.ts` composable in `src/composables/`.
+  - Example: `colorable.ts` → `src/composables/useColorable.ts`.
 
 - **Components**
   - All components (`VBtn`, `VCard`, etc.) are rewritten using `defineComponent` and Composition API.
@@ -32,7 +32,8 @@ The old source tree will be removed after conversion.
   - Default export = the composable or component.
 
 - **Language**
-  - Plain JavaScript only, **no TypeScript**.
+  - **TypeScript** for all new files.
+  - Use Vue 3 typings (`defineComponent`, `ExtractPropTypes`, etc.).
 
 ---
 
