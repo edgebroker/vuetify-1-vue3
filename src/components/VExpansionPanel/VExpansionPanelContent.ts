@@ -1,40 +1,16 @@
+import { defineComponent, h, ref, computed, getCurrentInstance, onMounted, onBeforeUnmount, nextTick, withDirectives, vShow } from 'vue'
+
 import { VExpandTransition } from '../transitions'
-
-import Bootable from '../../mixins/bootable'
-import Toggleable from '../../mixins/toggleable'
-import Rippleable from '../../mixins/rippleable'
-import { Registrable, inject as RegistrableInject } from '../../mixins/registrable'
-
 import VIcon from '../VIcon'
-import VExpansionPanel from './VExpansionPanel'
+import Ripple from '../../directives/ripple'
 
-import mixins, { ExtractVue } from '../../util/mixins'
-import Vue, { VNode } from 'vue'
+import useBootable from '../../composables/useBootable'
+import useToggleable from '../../composables/useToggleable'
+import useRegistrableInject from '../../composables/useRegistrableInject'
 
 import { consoleWarn } from '../../util/console'
 
-type VExpansionPanelInstance = InstanceType<typeof VExpansionPanel>
-
-interface options extends Vue {
-  expansionPanel: VExpansionPanelInstance
-}
-
-export default mixins<options &
-/* eslint-disable indent */
-  ExtractVue<[
-    typeof Bootable,
-    typeof Toggleable,
-    typeof Rippleable,
-    Registrable<'expansionPanel'>
-  ]>
-/* eslint-enable indent */
->(
-  Bootable,
-  Toggleable,
-  Rippleable,
-  RegistrableInject('expansionPanel', 'v-expansion-panel-content', 'v-expansion-panel')
-  /* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-expansion-panel-content',
 
   props: {
@@ -42,119 +18,91 @@ export default mixins<options &
     readonly: Boolean,
     expandIcon: {
       type: String,
-      default: '$vuetify.icons.expand'
+      default: '$vuetify.icons.expand',
     },
     hideActions: Boolean,
     ripple: {
       type: [Boolean, Object],
-      default: false
-    }
+      default: false,
+    },
+    value: null,
   },
 
-  data: () => ({
-    height: 'auto'
-  }),
+  setup (props, { slots, emit, expose }) {
+    const expansionPanel = useRegistrableInject('expansionPanel', 'v-expansion-panel-content', 'v-expansion-panel')
+    const { isActive } = useToggleable(props, emit)
+    const { isBooted, showLazyContent } = useBootable(props, { isActive })
 
-  computed: {
-    containerClasses (): object {
-      return {
-        'v-expansion-panel__container--active': this.isActive,
-        'v-expansion-panel__container--disabled': this.isDisabled
+    const height = ref('auto')
+
+    const isDisabled = computed(() => (expansionPanel && expansionPanel.disabled) || props.disabled)
+    const isReadonly = computed(() => (expansionPanel && expansionPanel.readonly) || props.readonly)
+
+    const containerClasses = computed(() => ({
+      'v-expansion-panel__container--active': isActive.value,
+      'v-expansion-panel__container--disabled': isDisabled.value,
+    }))
+
+    const vm = getCurrentInstance()
+
+    onMounted(() => {
+      expansionPanel && expansionPanel.register && expansionPanel.register(vm?.proxy)
+      if (typeof props.value !== 'undefined') consoleWarn('v-model has been deprecated', vm?.proxy)
+    })
+
+    onBeforeUnmount(() => {
+      expansionPanel && expansionPanel.unregister && expansionPanel.unregister(vm?.proxy)
+    })
+
+    function onKeydown (e: KeyboardEvent) {
+      if (e.keyCode === 13 && vm?.proxy && vm.proxy.$el === document.activeElement) {
+        expansionPanel && expansionPanel.panelClick && expansionPanel.panelClick(vm.proxy._uid)
       }
-    },
-    isDisabled (): boolean {
-      return this.expansionPanel.disabled || this.disabled
-    },
-    isReadonly (): boolean {
-      return this.expansionPanel.readonly || this.readonly
     }
-  },
 
-  beforeMount () {
-    this.expansionPanel.register(this)
+    function onHeaderClick () {
+      if (!isReadonly.value) {
+        expansionPanel && expansionPanel.panelClick && expansionPanel.panelClick(vm?.proxy._uid)
+      }
+    }
 
-    // Can be removed once fully deprecated
-    if (typeof this.value !== 'undefined') consoleWarn('v-model has been deprecated', this)
-  },
+    function genBody () {
+      const body = h('div', { ref: 'body', class: 'v-expansion-panel__body' }, showLazyContent(slots.default?.()))
+      return withDirectives(body, [[vShow, isActive.value]])
+    }
 
-  beforeDestroy () {
-    this.expansionPanel.unregister(this)
-  },
-
-  methods: {
-    onKeydown (e: KeyboardEvent) {
-      // Ensure element is the activeElement
-      if (
-        e.keyCode === 13 &&
-        this.$el === document.activeElement
-      ) this.expansionPanel.panelClick(this._uid)
-    },
-    onHeaderClick () {
-      this.isReadonly || this.expansionPanel.panelClick(this._uid)
-    },
-    genBody () {
-      return this.$createElement('div', {
-        ref: 'body',
-        class: 'v-expansion-panel__body',
-        directives: [{
-          name: 'show',
-          value: this.isActive
-        }]
-      }, this.showLazyContent(this.$slots.default))
-    },
-    genHeader () {
-      const children = [...(this.$slots.header || [])]
-
-      if (!this.hideActions) children.push(this.genIcon())
-
-      return this.$createElement('div', {
-        staticClass: 'v-expansion-panel__header',
-        directives: [{
-          name: 'ripple',
-          value: this.ripple
-        }],
-        on: {
-          click: this.onHeaderClick
-        }
-      }, children)
-    },
-    genIcon () {
-      const icon = this.$slots.actions ||
-        [this.$createElement(VIcon, this.expandIcon)]
-
-      return this.$createElement('transition', {
-        attrs: { name: 'fade-transition' }
-      }, [
-        this.$createElement('div', {
-          staticClass: 'v-expansion-panel__header__icon',
-          directives: [{
-            name: 'show',
-            value: !this.isDisabled
-          }]
-        }, icon)
+    function genIcon () {
+      const icon = slots.actions?.() || [h(VIcon, {}, { default: () => props.expandIcon })]
+      return h('transition', { name: 'fade-transition' }, [
+        withDirectives(h('div', { class: 'v-expansion-panel__header__icon' }, icon), [[vShow, !isDisabled.value]])
       ])
-    },
-    toggle (active: boolean) {
-      if (active) this.isBooted = true
-
-      this.$nextTick(() => (this.isActive = active))
     }
-  },
 
-  render (h): VNode {
-    return h('li', {
-      staticClass: 'v-expansion-panel__container',
-      class: this.containerClasses,
-      attrs: {
-        tabindex: this.isReadonly || this.isDisabled ? null : 0,
-        'aria-expanded': Boolean(this.isActive)
-      },
-      on: {
-        keydown: this.onKeydown
-      }
+    function genHeader () {
+      const children = slots.header ? [...slots.header()] : []
+      if (!props.hideActions) children.push(genIcon())
+      return withDirectives(h('div', {
+        class: 'v-expansion-panel__header',
+        onClick: onHeaderClick,
+      }, children), [[Ripple, props.ripple]])
+    }
+
+    function toggle (active: boolean) {
+      if (active) isBooted.value = true
+      nextTick(() => { isActive.value = active })
+    }
+
+    expose({ toggle })
+
+    return () => h('li', {
+      class: ['v-expansion-panel__container', containerClasses.value],
+      tabindex: isReadonly.value || isDisabled.value ? undefined : 0,
+      'aria-expanded': String(Boolean(isActive.value)),
+      onKeydown,
     }, [
-      this.$slots.header && this.genHeader(),
-      h(VExpandTransition, [this.genBody()])
+      slots.header && genHeader(),
+      h(VExpandTransition, {}, { default: () => [genBody()] }),
     ])
   }
 })
+

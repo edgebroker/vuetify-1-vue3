@@ -1,100 +1,75 @@
 // Styles
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-// Mixins
-import Applicationable from '../../mixins/applicationable'
-import Colorable from '../../mixins/colorable'
-import Themeable from '../../mixins/themeable'
+// Composables
+import useApplicationable from '../../composables/useApplicationable'
+import useColorable, { colorProps } from '../../composables/useColorable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
 
-/* @vue/component */
-export default {
+// Types
+import { defineComponent, h, computed, getCurrentInstance } from 'vue'
+
+export default defineComponent({
   name: 'v-footer',
-
-  mixins: [
-    Applicationable(null, [
-      'height',
-      'inset'
-    ]),
-    Colorable,
-    Themeable
-  ],
 
   props: {
     height: {
       default: 32,
-      type: [Number, String]
+      type: [Number, String],
     },
-    inset: Boolean
+    inset: Boolean,
+    app: Boolean,
+    absolute: Boolean,
+    fixed: Boolean,
+    ...colorProps,
+    ...themeProps,
   },
 
-  computed: {
-    applicationProperty () {
-      return this.inset ? 'insetFooter' : 'footer'
-    },
-    computedMarginBottom () {
-      if (!this.app) return
+  setup (props, { slots }) {
+    const { setBackgroundColor } = useColorable(props)
+    const { themeClasses } = useThemeable(props)
+    const { app } = useApplicationable(props, computed(() => props.inset ? 'insetFooter' : 'footer'), ['height', 'inset'])
+    const vm = getCurrentInstance()
 
-      return this.$vuetify.application.bottom
-    },
-    computedPaddingLeft () {
-      return !this.app || !this.inset
-        ? 0
-        : this.$vuetify.application.left
-    },
-    computedPaddingRight () {
-      return !this.app || !this.inset
-        ? 0
-        : this.$vuetify.application.right
-    },
-    styles () {
-      const styles = {
-        height: isNaN(this.height) ? this.height : `${this.height}px`
-      }
-
-      if (this.computedPaddingLeft) {
-        styles.paddingLeft = `${this.computedPaddingLeft}px`
-      }
-
-      if (this.computedPaddingRight) {
-        styles.paddingRight = `${this.computedPaddingRight}px`
-      }
-
-      if (this.computedMarginBottom) {
-        styles.marginBottom = `${this.computedMarginBottom}px`
-      }
-
-      return styles
-    }
-  },
-
-  methods: {
-    /**
-     * Update the application layout
-     *
-     * @return {number}
-     */
-    updateApplication () {
-      const height = parseInt(this.height)
-
-      return isNaN(height)
-        ? this.$el ? this.$el.clientHeight : 0
-        : height
-    }
-  },
-
-  render (h) {
-    const data = this.setBackgroundColor(this.color, {
-      staticClass: 'v-footer',
-      'class': {
-        'v-footer--absolute': this.absolute,
-        'v-footer--fixed': !this.absolute && (this.app || this.fixed),
-        'v-footer--inset': this.inset,
-        ...this.themeClasses
-      },
-      style: this.styles,
-      ref: 'content'
+    const computedMarginBottom = computed(() => {
+      if (!app.value) return 0
+      return vm?.proxy.$vuetify.application.bottom
     })
 
-    return h('footer', data, this.$slots.default)
+    const computedPaddingLeft = computed(() => {
+      return !app.value || !props.inset
+        ? 0
+        : vm?.proxy.$vuetify.application.left
+    })
+
+    const computedPaddingRight = computed(() => {
+      return !app.value || !props.inset
+        ? 0
+        : vm?.proxy.$vuetify.application.right
+    })
+
+    const styles = computed(() => {
+      const style = {
+        height: isNaN(props.height) ? props.height : `${props.height}px`,
+      }
+      if (computedPaddingLeft.value) style.paddingLeft = `${computedPaddingLeft.value}px`
+      if (computedPaddingRight.value) style.paddingRight = `${computedPaddingRight.value}px`
+      if (computedMarginBottom.value) style.marginBottom = `${computedMarginBottom.value}px`
+      return style
+    })
+
+    const classes = computed(() => ({
+      'v-footer--absolute': props.absolute,
+      'v-footer--fixed': !props.absolute && (props.app || props.fixed),
+      'v-footer--inset': props.inset,
+      ...themeClasses.value,
+    }))
+
+    return () => h('footer', setBackgroundColor(props.color, {
+      class: ['v-footer', classes.value],
+      style: styles.value,
+      ref: 'content',
+    }), slots.default?.())
   }
-}
+})
+

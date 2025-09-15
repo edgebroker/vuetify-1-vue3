@@ -1,128 +1,100 @@
 // Styles
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-import { provide as RegistrableProvide } from '../../mixins/registrable'
+// Composables
+import useRegistrableProvide from '../../composables/useRegistrableProvide'
 
-/* @vue/component */
-export default {
+// Types
+import { defineComponent, h, reactive, watch, provide } from 'vue'
+
+export default defineComponent({
   name: 'v-form',
-
-  mixins: [RegistrableProvide('form')],
 
   inheritAttrs: false,
 
   props: {
     value: Boolean,
-    lazyValidation: Boolean
+    lazyValidation: Boolean,
   },
 
-  data () {
-    return {
-      inputs: [],
-      watchers: [],
-      errorBag: {}
-    }
-  },
+  setup (props, { slots, emit, attrs, expose }) {
+    const { children: inputs } = useRegistrableProvide('form')
 
-  watch: {
-    errorBag: {
-      handler () {
-        const errors = Object.values(this.errorBag).includes(true)
-        this.$emit('input', !errors)
-      },
-      deep: true,
-      immediate: true
-    }
-  },
+    const watchers = []
+    const errorBag = reactive({})
 
-  methods: {
-    watchInput (input) {
-      const watcher = input => {
-        return input.$watch('hasError', val => {
-          this.$set(this.errorBag, input._uid, val)
-        }, { immediate: true })
-      }
+    function watchInput (input) {
+      const watcher = input => input.$watch('hasError', val => { errorBag[input._uid] = val }, { immediate: true })
+      const watchersObj = { _uid: input._uid, valid: undefined, shouldValidate: undefined }
 
-      const watchers = {
-        _uid: input._uid,
-        valid: undefined,
-        shouldValidate: undefined
-      }
-
-      if (this.lazyValidation) {
-        // Only start watching inputs if we need to
-        watchers.shouldValidate = input.$watch('shouldValidate', val => {
+      if (props.lazyValidation) {
+        watchersObj.shouldValidate = input.$watch('shouldValidate', val => {
           if (!val) return
-
-          // Only watch if we're not already doing it
-          if (this.errorBag.hasOwnProperty(input._uid)) return
-
-          watchers.valid = watcher(input)
+          if (errorBag.hasOwnProperty(input._uid)) return
+          watchersObj.valid = watcher(input)
         })
       } else {
-        watchers.valid = watcher(input)
+        watchersObj.valid = watcher(input)
       }
 
-      return watchers
-    },
-    /** @public */
-    validate () {
-      const errors = this.inputs.filter(input => !input.validate(true)).length
-      return !errors
-    },
-    /** @public */
-    reset () {
-      for (let i = this.inputs.length; i--;) {
-        this.inputs[i].reset()
-      }
-      if (this.lazyValidation) {
-        // Account for timeout in validatable
-        setTimeout(() => {
-          this.errorBag = {}
-        }, 0)
-      }
-    },
-    /** @public */
-    resetValidation () {
-      for (let i = this.inputs.length; i--;) {
-        this.inputs[i].resetValidation()
-      }
-      if (this.lazyValidation) {
-        // Account for timeout in validatable
-        setTimeout(() => {
-          this.errorBag = {}
-        }, 0)
-      }
-    },
-    register (input) {
-      const unwatch = this.watchInput(input)
-      this.inputs.push(input)
-      this.watchers.push(unwatch)
-    },
-    unregister (input) {
-      const found = this.inputs.find(i => i._uid === input._uid)
+      return watchersObj
+    }
 
-      if (!found) return
+    function register (input) {
+      const unwatch = watchInput(input)
+      inputs.push(input)
+      watchers.push(unwatch)
+    }
 
-      const unwatch = this.watchers.find(i => i._uid === found._uid)
+    function unregister (input) {
+      const foundIndex = inputs.findIndex(i => i._uid === input._uid)
+      if (foundIndex === -1) return
+      const unwatch = watchers[foundIndex]
       unwatch.valid && unwatch.valid()
       unwatch.shouldValidate && unwatch.shouldValidate()
-
-      this.watchers = this.watchers.filter(i => i._uid !== found._uid)
-      this.inputs = this.inputs.filter(i => i._uid !== found._uid)
-      this.$delete(this.errorBag, found._uid)
+      watchers.splice(foundIndex, 1)
+      inputs.splice(foundIndex, 1)
+      delete errorBag[input._uid]
     }
-  },
 
-  render (h) {
-    return h('form', {
-      staticClass: 'v-form',
-      attrs: Object.assign({
-        novalidate: true
-      }, this.$attrs),
-      on: {
-        submit: e => this.$emit('submit', e)
+    provide('form', { register, unregister })
+
+    watch(errorBag, () => {
+      const errors = Object.values(errorBag).includes(true)
+      emit('input', !errors)
+    }, { deep: true, immediate: true })
+
+    function validate () {
+      const errors = inputs.filter(input => !input.validate(true)).length
+      return !errors
+    }
+
+    function reset () {
+      for (let i = inputs.length; i--;) {
+        inputs[i].reset()
       }
-    }, this.$slots.default)
+      if (props.lazyValidation) {
+        setTimeout(() => { Object.keys(errorBag).forEach(k => delete errorBag[k]) }, 0)
+      }
+    }
+
+    function resetValidation () {
+      for (let i = inputs.length; i--;) {
+        inputs[i].resetValidation()
+      }
+      if (props.lazyValidation) {
+        setTimeout(() => { Object.keys(errorBag).forEach(k => delete errorBag[k]) }, 0)
+      }
+    }
+
+    expose({ validate, reset, resetValidation })
+
+    return () => h('form', {
+      class: 'v-form',
+      novalidate: true,
+      ...attrs,
+      onSubmit: e => emit('submit', e),
+    }, slots.default?.())
   }
-}
+})
+
