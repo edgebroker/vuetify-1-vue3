@@ -4,12 +4,17 @@ import VImg from '../VImg/VImg'
 // Utils
 import { deprecate } from '../../util/console'
 
-/* istanbul ignore next */
-/* @vue/component */
-export default VImg.extend({
-  name: 'v-card-media',
+// Vue
+import { defineComponent, onMounted } from 'vue'
 
-  mounted () {
-    deprecate('v-card-media', this.src ? 'v-img' : 'v-responsive', this)
+/* istanbul ignore next */
+export default defineComponent({
+  name: 'v-card-media',
+  extends: VImg,
+  setup (props) {
+    onMounted(() => {
+      deprecate('v-card-media', props.src ? 'v-img' : 'v-responsive')
+    })
+    return {}
   }
 })

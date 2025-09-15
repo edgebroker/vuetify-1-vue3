@@ -4,29 +4,31 @@ import VWindowItem from '../VWindow/VWindowItem'
 // Components
 import { VImg } from '../VImg'
 
-/* @vue/component */
-export default VWindowItem.extend({
-  name: 'v-carousel-item',
+// Vue
+import { defineComponent, h, getCurrentInstance } from 'vue'
 
+export default defineComponent({
+  name: 'v-carousel-item',
+  extends: VWindowItem,
   inheritAttrs: false,
 
-  methods: {
-    genDefaultSlot () {
-      return [
-        this.$createElement(VImg, {
-          staticClass: 'v-carousel__item',
-          props: {
-            ...this.$attrs,
-            height: this.windowGroup.internalHeight
-          },
-          on: this.$listeners
-        }, this.$slots.default)
-      ]
-    },
-    onBeforeEnter () { /* noop */ },
-    onEnter () { /* noop */ },
-    onAfterEnter () { /* noop */ },
-    onBeforeLeave () { /* noop */ },
-    onEnterCancelled () { /* noop */ }
+  setup (props, { slots, attrs }) {
+    const vm = getCurrentInstance()!
+    const proxy: any = vm.proxy
+
+    function genDefaultSlot () {
+      const data: any = { ...attrs, class: ['v-carousel__item', attrs.class], height: proxy.windowGroup.internalHeight }
+      return [h(VImg, data, slots.default?.())]
+    }
+
+    function onBeforeEnter () {}
+    function onEnter () {}
+    function onAfterEnter () {}
+    function onBeforeLeave () {}
+    function onEnterCancelled () {}
+
+    Object.assign(proxy, { genDefaultSlot, onBeforeEnter, onEnter, onAfterEnter, onBeforeLeave, onEnterCancelled })
+
+    return {}
   }
 })
