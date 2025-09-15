@@ -1,6 +1,6 @@
 import { ref, computed, watch, inject, getCurrentInstance, onMounted, onBeforeUnmount, onBeforeMount, nextTick } from 'vue'
-import { deepEqual } from '../utl/helpers'
-import { consoleError } from '../utl/console'
+import { deepEqual } from '../util/helpers'
+import { consoleError } from '../util/console'
 
 export const validatableProps = {
   disabled: Boolean,

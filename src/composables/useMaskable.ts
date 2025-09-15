@@ -3,7 +3,7 @@ import {
   isMaskDelimiter,
   maskText as maskTextOriginal,
   unmaskText as unmaskTextOriginal,
-} from '../utl/mask'
+} from '../util/mask'
 
 export default function useMaskable (props, { emit }) {
   const selection = ref(0)

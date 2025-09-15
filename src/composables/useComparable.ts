@@ -1,4 +1,4 @@
-import { deepEqual } from '../utl/helpers'
+import { deepEqual } from '../util/helpers'
 
 export const comparableProps = {
   valueComparator: {
