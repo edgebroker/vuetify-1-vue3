@@ -1,13 +1,15 @@
 import "@/css/vuetify.css"
-// Mixins
-import Colorable from '../../mixins/colorable'
-import Sizeable from '../../mixins/sizeable'
-import Themeable from '../../mixins/themeable'
-// Util
+
+// Composables
+import useColorable, { colorProps } from '../../composables/useColorable'
+import useSizeable, { sizeableProps } from '../../composables/useSizeable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
+
+// Utils
 import { convertToUnit, keys, remapInternalIcon } from '../../util/helpers'
+
 // Types
-import Vue, { CreateElement, VNode, VNodeChildren, VNodeData } from 'vue'
-import mixins from '../../util/mixins'
+import { defineComponent, getCurrentInstance, h } from 'vue'
 import { VuetifyIcon, VuetifyIconComponent } from 'vuetify'
 
 enum SIZE_MAP {
@@ -22,75 +24,73 @@ function isFontAwesome5 (iconType: string): boolean {
   return ['fas', 'far', 'fal', 'fab'].some(val => iconType.includes(val))
 }
 
-const VIcon = mixins(
-  Colorable,
-  Sizeable,
-  Themeable
-  /* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-icon',
 
   props: {
     disabled: Boolean,
     left: Boolean,
-    right: Boolean
+    right: Boolean,
+    ...sizeableProps,
+    ...colorProps,
+    ...themeProps
   },
 
-  methods: {
-    getIcon (): VuetifyIcon {
+  setup (props, { slots, attrs }) {
+    const instance = getCurrentInstance()
+    const { setTextColor } = useColorable(props)
+    const sizeRefs = useSizeable(props)
+    const { themeClasses } = useThemeable(props)
+
+    function getIcon (): VuetifyIcon {
       let iconName = ''
-      if (this.$slots.default) iconName = this.$slots.default[0].text!.trim()
-
-      return remapInternalIcon(this, iconName)
-    },
-    getSize (): string | undefined {
-      const sizes = {
-        small: this.small,
-        medium: this.medium,
-        large: this.large,
-        xLarge: this.xLarge
+      const slot = slots.default?.()
+      if (slot && slot.length && typeof slot[0].children === 'string') {
+        iconName = (slot[0].children as string).trim()
       }
+      return remapInternalIcon(instance!.proxy as any, iconName)
+    }
 
+    function getSize (): string | undefined {
+      const sizes: any = {
+        small: sizeRefs.small?.value,
+        medium: sizeRefs.medium?.value,
+        large: sizeRefs.large?.value,
+        xLarge: sizeRefs.xLarge?.value
+      }
       const explicitSize = keys(sizes).find(key => sizes[key])
+      return (explicitSize && SIZE_MAP[explicitSize]) || convertToUnit(sizeRefs.size?.value)
+    }
 
-      return (explicitSize && SIZE_MAP[explicitSize]) || convertToUnit(this.size)
-    },
-    // Component data for both font and svg icon.
-    getDefaultData (): VNodeData {
-      const data: VNodeData = {
-        staticClass: 'v-icon',
+    function getDefaultData () {
+      return {
         class: {
-          'v-icon--disabled': this.disabled,
-          'v-icon--left': this.left,
-          'v-icon--link': this.$listeners.click || this.$listeners['!click'],
-          'v-icon--right': this.right
+          'v-icon': true,
+          'v-icon--disabled': props.disabled,
+          'v-icon--left': props.left,
+          'v-icon--link': !!attrs.onClick,
+          'v-icon--right': props.right
         },
-        attrs: {
-          'aria-hidden': true,
-          ...this.$attrs
-        },
-        on: this.$listeners
-      }
+        'aria-hidden': true,
+        ...attrs
+      } as any
+    }
 
-      return data
-    },
-    applyColors (data: VNodeData): void {
-      data.class = { ...data.class, ...this.themeClasses }
-      this.setTextColor(this.color, data)
-    },
-    renderFontIcon (icon: string, h: CreateElement): VNode {
-      const newChildren: VNodeChildren = []
-      const data = this.getDefaultData()
+    function applyColors (data: any) {
+      data.class = { ...data.class, ...themeClasses.value }
+      setTextColor(props.color, data)
+    }
+
+    function renderFontIcon (icon: string) {
+      const children: any[] = []
+      const data: any = getDefaultData()
 
       let iconType = 'material-icons'
-      // Material Icon delimiter is _
-      // https://material.io/icons/
       const delimiterIndex = icon.indexOf('-')
       const isMaterialIcon = delimiterIndex <= -1
 
       if (isMaterialIcon) {
-        // Material icon uses ligatures.
-        newChildren.push(icon)
+        children.push(icon)
       } else {
         iconType = icon.slice(0, delimiterIndex)
         if (isFontAwesome5(iconType)) iconType = ''
@@ -99,68 +99,32 @@ const VIcon = mixins(
       data.class[iconType] = true
       data.class[icon] = !isMaterialIcon
 
-      const fontSize = this.getSize()
+      const fontSize = getSize()
       if (fontSize) data.style = { fontSize }
 
-      this.applyColors(data)
+      applyColors(data)
 
-      return h('i', data, newChildren)
-    },
-    renderSvgIcon (icon: VuetifyIconComponent, h: CreateElement): VNode {
-      const data = this.getDefaultData()
+      return h('i', data, children)
+    }
+
+    function renderSvgIcon (icon: VuetifyIconComponent) {
+      const data: any = getDefaultData()
       data.class['v-icon--is-component'] = true
 
-      const size = this.getSize()
+      const size = getSize()
       if (size) {
-        data.style = {
-          fontSize: size,
-          height: size
-        }
+        data.style = { fontSize: size, height: size }
       }
 
-      this.applyColors(data)
+      applyColors(data)
 
-      const component = icon.component
-      data.props = icon.props
-      data.nativeOn = data.on
-
-      return h(component, data)
-    }
-  },
-
-  render (h: CreateElement): VNode {
-    const icon = this.getIcon()
-
-    if (typeof icon === 'string') {
-      return this.renderFontIcon(icon, h)
+      return h(icon.component as any, { ...data, ...icon.props })
     }
 
-    return this.renderSvgIcon(icon, h)
-  }
-})
-
-export default Vue.extend({
-  name: 'v-icon',
-
-  $_wrapperFor: VIcon,
-
-  functional: true,
-
-  render (h, { data, children }): VNode {
-    let iconName = ''
-
-    // Support usage of v-text and v-html
-    if (data.domProps) {
-      iconName = data.domProps.textContent ||
-        data.domProps.innerHTML ||
-        iconName
-
-      // Remove nodes so it doesn't
-      // overwrite our changes
-      delete data.domProps.textContent
-      delete data.domProps.innerHTML
+    return () => {
+      const icon = getIcon()
+      if (typeof icon === 'string') return renderFontIcon(icon)
+      return renderSvgIcon(icon)
     }
-
-    return h(VIcon, data, iconName ? [iconName] : children)
   }
 })

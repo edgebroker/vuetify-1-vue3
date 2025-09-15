@@ -1,8 +1,8 @@
 import "@/css/vuetify.css"
 
 // Types
-import { VNode } from 'vue'
-import { PropValidator } from 'vue/types/options'
+import { defineComponent, h, ref, computed, watch, onMounted, getCurrentInstance } from 'vue'
+import { PropType } from 'vue'
 
 // Components
 import VResponsive from '../VResponsive'
@@ -10,7 +10,6 @@ import VResponsive from '../VResponsive'
 // Utils
 import { consoleError, consoleWarn } from '../../util/console'
 
-// not intended for public use, this is passed in by vuetify-loader
 export interface srcObject {
   src: string
   srcset?: string
@@ -18,17 +17,17 @@ export interface srcObject {
   aspect: number
 }
 
-/* @vue/component */
-export default VResponsive.extend({
+export default defineComponent({
   name: 'v-img',
 
   props: {
+    ...(VResponsive as any).props,
     alt: String,
     contain: Boolean,
     src: {
-      type: [String, Object],
+      type: [String, Object] as PropType<string | srcObject>,
       default: ''
-    } as PropValidator<string | srcObject>,
+    },
     gradient: String,
     lazySrc: String,
     srcset: String,
@@ -43,182 +42,149 @@ export default VResponsive.extend({
     }
   },
 
-  data () {
-    return {
-      currentSrc: '', // Set from srcset
-      image: null as HTMLImageElement | null,
-      isLoading: true,
-      calculatedAspectRatio: undefined as number | undefined
-    }
-  },
+  setup (props, { slots, emit, attrs }) {
+    const currentSrc = ref('')
+    const image = ref<HTMLImageElement | null>(null)
+    const isLoading = ref(true)
+    const calculatedAspectRatio = ref<number | undefined>(undefined)
 
-  computed: {
-    computedAspectRatio (): number {
-      return this.normalisedSrc.aspect
-    },
-    normalisedSrc (): srcObject {
-      return typeof this.src === 'string'
+    const normalisedSrc = computed<srcObject>(() => {
+      return typeof props.src === 'string'
         ? {
-          src: this.src,
-          srcset: this.srcset,
-          lazySrc: this.lazySrc,
-          aspect: Number(this.aspectRatio || this.calculatedAspectRatio)
-        }
+            src: props.src,
+            srcset: props.srcset,
+            lazySrc: props.lazySrc,
+            aspect: Number((props as any).aspectRatio || calculatedAspectRatio.value)
+          }
         : {
-          src: this.src.src,
-          srcset: this.srcset || this.src.srcset,
-          lazySrc: this.lazySrc || this.src.lazySrc,
-          aspect: Number(this.aspectRatio || this.src.aspect || this.calculatedAspectRatio)
-        }
-    },
-    __cachedImage (): VNode | [] {
-      if (!(this.normalisedSrc.src || this.normalisedSrc.lazySrc)) return []
+            src: (props.src as srcObject).src,
+            srcset: props.srcset || (props.src as srcObject).srcset,
+            lazySrc: props.lazySrc || (props.src as srcObject).lazySrc,
+            aspect: Number((props as any).aspectRatio || (props.src as srcObject).aspect || calculatedAspectRatio.value)
+          }
+    })
 
+    const computedAspectRatio = computed(() => normalisedSrc.value.aspect)
+
+    const __cachedImage = computed(() => {
+      if (!(normalisedSrc.value.src || normalisedSrc.value.lazySrc)) return []
       const backgroundImage: string[] = []
-      const src = this.isLoading ? this.normalisedSrc.lazySrc : this.currentSrc
-
-      if (this.gradient) backgroundImage.push(`linear-gradient(${this.gradient})`)
+      const src = isLoading.value ? normalisedSrc.value.lazySrc : currentSrc.value
+      if (props.gradient) backgroundImage.push(`linear-gradient(${props.gradient})`)
       if (src) backgroundImage.push(`url("${src}")`)
-
-      const image = this.$createElement('div', {
-        staticClass: 'v-image__image',
+      const imageVNode = h('div', {
         class: {
-          'v-image__image--preload': this.isLoading,
-          'v-image__image--contain': this.contain,
-          'v-image__image--cover': !this.contain
+          'v-image__image': true,
+          'v-image__image--preload': isLoading.value,
+          'v-image__image--contain': props.contain,
+          'v-image__image--cover': !props.contain
         },
         style: {
           backgroundImage: backgroundImage.join(', '),
-          backgroundPosition: this.position
+          backgroundPosition: props.position
         },
-        key: +this.isLoading
+        key: +isLoading.value
       })
+      if (!props.transition) return imageVNode
+      return h('transition', { name: props.transition as string, mode: 'in-out' }, { default: () => [imageVNode] })
+    })
 
-      if (!this.transition) return image
-
-      return this.$createElement('transition', {
-        attrs: {
-          name: this.transition,
-          mode: 'in-out'
-        }
-      }, [image])
-    }
-  },
-
-  watch: {
-    src () {
-      if (!this.isLoading) this.init()
-      else this.loadImage()
-    },
-    '$vuetify.breakpoint.width': 'getSrc'
-  },
-
-  mounted () {
-    this.init()
-  },
-
-  methods: {
-    init () {
-      if (this.normalisedSrc.lazySrc) {
-        const lazyImg = new Image()
-        lazyImg.src = this.normalisedSrc.lazySrc
-        this.pollForSize(lazyImg, null)
-      }
-      /* istanbul ignore else */
-      if (this.normalisedSrc.src) this.loadImage()
-    },
-    onLoad () {
-      this.getSrc()
-      this.isLoading = false
-      this.$emit('load', this.src)
-    },
-    onError () {
-      consoleError(
-        `Image load failed\n\n` +
-        `src: ${this.normalisedSrc.src}`,
-        this
-      )
-      this.$emit('error', this.src)
-    },
-    getSrc () {
-      /* istanbul ignore else */
-      if (this.image) this.currentSrc = this.image.currentSrc || this.image.src
-    },
-    loadImage () {
-      const image = new Image()
-      this.image = image
-
-      image.onload = () => {
-        /* istanbul ignore if */
-        if (image.decode) {
-          image.decode().catch((err: DOMException) => {
-            consoleWarn(
-              `Failed to decode image, trying to render anyway\n\n` +
-              `src: ${this.normalisedSrc.src}` +
-              (err.message ? `\nOriginal error: ${err.message}` : ''),
-              this
-            )
-          }).then(this.onLoad)
-        } else {
-          this.onLoad()
-        }
-      }
-      image.onerror = this.onError
-
-      image.src = this.normalisedSrc.src
-      this.sizes && (image.sizes = this.sizes)
-      this.normalisedSrc.srcset && (image.srcset = this.normalisedSrc.srcset)
-
-      this.aspectRatio || this.pollForSize(image)
-      this.getSrc()
-    },
-    pollForSize (img: HTMLImageElement, timeout: number | null = 100) {
+    function pollForSize (img: HTMLImageElement, timeout: number | null = 100) {
       const poll = () => {
         const { naturalHeight, naturalWidth } = img
-
         if (naturalHeight || naturalWidth) {
-          this.calculatedAspectRatio = naturalWidth / naturalHeight
+          calculatedAspectRatio.value = naturalWidth / naturalHeight
         } else {
           timeout != null && setTimeout(poll, timeout)
         }
       }
-
       poll()
-    },
-    __genPlaceholder (): VNode | void {
-      if (this.$slots.placeholder) {
-        const placeholder = this.isLoading
-          ? [this.$createElement('div', {
-            staticClass: 'v-image__placeholder'
-          }, this.$slots.placeholder)]
+    }
+
+    function getSrc () {
+      if (image.value) currentSrc.value = (image.value as any).currentSrc || image.value.src
+    }
+
+    function onLoad () {
+      getSrc()
+      isLoading.value = false
+      emit('load', props.src)
+    }
+
+    const instance = getCurrentInstance()
+
+    function onError () {
+      consoleError(`Image load failed\n\nsrc: ${normalisedSrc.value.src}`, instance?.proxy)
+      emit('error', props.src)
+    }
+
+    function loadImage () {
+      const img = new Image()
+      image.value = img
+
+      img.onload = () => {
+        if ((img as any).decode) {
+          (img as any).decode().catch((err: DOMException) => {
+            consoleWarn(
+              `Failed to decode image, trying to render anyway\n\nsrc: ${normalisedSrc.value.src}` +
+              (err.message ? `\nOriginal error: ${err.message}` : ''),
+              instance?.proxy
+            )
+          }).then(onLoad)
+        } else {
+          onLoad()
+        }
+      }
+      img.onerror = onError
+      img.src = normalisedSrc.value.src
+      if (props.sizes) img.sizes = props.sizes
+      if (normalisedSrc.value.srcset) img.srcset = normalisedSrc.value.srcset
+      if (!(props as any).aspectRatio) pollForSize(img)
+      getSrc()
+    }
+
+    function init () {
+      if (normalisedSrc.value.lazySrc) {
+        const lazyImg = new Image()
+        lazyImg.src = normalisedSrc.value.lazySrc
+        pollForSize(lazyImg, null)
+      }
+      if (normalisedSrc.value.src) loadImage()
+    }
+
+    function __genPlaceholder () {
+      if (slots.placeholder) {
+        const placeholder = isLoading.value
+          ? [h('div', { class: 'v-image__placeholder' }, slots.placeholder())]
           : []
-
-        if (!this.transition) return placeholder[0]
-
-        return this.$createElement('transition', {
-          attrs: { name: this.transition }
-        }, placeholder)
+        if (!props.transition) return placeholder[0]
+        return h('transition', { name: props.transition as string }, { default: () => placeholder })
       }
     }
-  },
 
-  render (h): VNode {
-    const node = VResponsive.options.render.call(this, h)
+    watch(() => props.src, () => {
+      if (!isLoading.value) init()
+      else loadImage()
+    })
 
-    node.data!.staticClass += ' v-image'
+    onMounted(() => {
+      init()
+    })
 
-    node.data!.attrs = {
-      role: this.alt ? 'img' : undefined,
-      'aria-label': this.alt
+    return () => {
+      return h(VResponsive, {
+        ...attrs,
+        aspectRatio: computedAspectRatio.value,
+        class: ['v-image', attrs.class],
+        role: props.alt ? 'img' : undefined,
+        'aria-label': props.alt
+      }, {
+        default: () => [
+          __cachedImage.value as any,
+          __genPlaceholder(),
+          slots.default?.()
+        ]
+      })
     }
-
-    node.children = [
-      this.__cachedSizer,
-      this.__cachedImage,
-      this.__genPlaceholder(),
-      this.genContent()
-    ] as VNode[]
-
-    return h(node.tag, node.data, node.children)
   }
 })

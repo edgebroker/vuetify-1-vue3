@@ -6,45 +6,22 @@ import VIcon from '../VIcon'
 import VLabel from '../VLabel'
 import VMessages from '../VMessages'
 
-// Mixins
-import Colorable from '../../mixins/colorable'
-import Themeable from '../../mixins/themeable'
-import Validatable from '../../mixins/validatable'
+// Composables
+import useColorable, { colorProps } from '../../composables/useColorable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
+import useValidatable, { validatableProps } from '../../composables/useValidatable'
 
 // Utilities
-import {
-  convertToUnit,
-  kebabCase
-} from '../../util/helpers'
-import { deprecate } from '../../util/console'
-import mixins, { ExtractVue } from '../../util/mixins'
+import { convertToUnit, kebabCase } from '../../util/helpers'
 
 // Types
-import Vue, { VNode, VNodeData } from 'vue'
-interface options extends Vue {
-  /* eslint-disable-next-line camelcase */
-  $_modelEvent: string
-}
+import { defineComponent, h, computed, ref } from 'vue'
 
-export default mixins<options &
-/* eslint-disable indent */
-  ExtractVue<[
-    typeof Colorable,
-    typeof Themeable,
-    typeof Validatable
-  ]>
-/* eslint-enable indent */
->(
-  Colorable,
-  Themeable,
-  Validatable
-  /* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-input',
 
   props: {
     appendIcon: String,
-    /** @deprecated */
     appendIconCb: Function,
     backgroundColor: {
       type: String,
@@ -57,260 +34,155 @@ export default mixins<options &
     loading: Boolean,
     persistentHint: Boolean,
     prependIcon: String,
-    /** @deprecated */
     prependIconCb: Function,
-    value: { required: false }
+    value: { required: false },
+    ...colorProps,
+    ...themeProps,
+    ...validatableProps
   },
 
-  data () {
-    return {
-      attrsInput: {},
-      lazyValue: this.value as any,
-      hasMouseDown: false
-    }
-  },
+  setup (props, { slots, attrs, emit }) {
+    const { setBackgroundColor, setTextColor } = useColorable(props)
+    const { themeClasses } = useThemeable(props)
+    const {
+      validationState,
+      hasMessages,
+      hasState,
+      isFocused,
+      validations,
+      lazyValue
+    } = useValidatable(props, { emit })
 
-  computed: {
-    classes: () => ({}),
-    classesInput (): object {
-      return {
-        ...this.classes,
-        'v-input--has-state': this.hasState,
-        'v-input--hide-details': this.hideDetails,
-        'v-input--is-label-active': this.isLabelActive,
-        'v-input--is-dirty': this.isDirty,
-        'v-input--is-disabled': this.disabled,
-        'v-input--is-focused': this.isFocused,
-        'v-input--is-loading': this.loading !== false && this.loading !== undefined,
-        'v-input--is-readonly': this.readonly,
-        ...this.themeClasses
-      }
-    },
-    directivesInput () {
-      return []
-    },
-    hasHint () {
-      return !this.hasMessages &&
-        this.hint &&
-        (this.persistentHint || this.isFocused)
-    },
-    hasLabel () {
-      return Boolean(this.$slots.label || this.label)
-    },
-    // Proxy for `lazyValue`
-    // This allows an input
-    // to function without
-    // a provided model
-    internalValue: {
-      get () {
-        return this.lazyValue
-      },
-      set (val: any) {
-        this.lazyValue = val
-        this.$emit(this.$_modelEvent, val)
-      }
-    },
-    isDirty () {
-      return !!this.lazyValue
-    },
-    isDisabled () {
-      return Boolean(this.disabled || this.readonly)
-    },
-    isLabelActive () {
-      return this.isDirty
-    }
-  },
+    const hasMouseDown = ref(false)
 
-  watch: {
-    value (val) {
-      this.lazyValue = val
-    }
-  },
+    const isDirty = computed(() => !!lazyValue.value)
+    const isLabelActive = computed(() => isDirty.value)
+    const hasHint = computed(() => !hasMessages.value && props.hint && (props.persistentHint || isFocused.value))
+    const hasLabel = computed(() => Boolean(slots.label || props.label))
 
-  beforeCreate () {
-    // v-radio-group needs to emit a different event
-    // https://github.com/vuetifyjs/vuetify/issues/4752
-    this.$_modelEvent = (this.$options.model && this.$options.model.event) || 'input'
-  },
+    const classesInput = computed(() => ({
+      'v-input--has-state': hasState.value,
+      'v-input--hide-details': props.hideDetails,
+      'v-input--is-label-active': isLabelActive.value,
+      'v-input--is-dirty': isDirty.value,
+      'v-input--is-disabled': props.disabled,
+      'v-input--is-focused': isFocused.value,
+      'v-input--is-loading': props.loading !== false && props.loading !== undefined,
+      'v-input--is-readonly': props.readonly,
+      ...themeClasses.value
+    }))
 
-  methods: {
-    genContent () {
-      return [
-        this.genPrependSlot(),
-        this.genControl(),
-        this.genAppendSlot()
-      ]
-    },
-    genControl () {
-      return this.$createElement('div', {
-        staticClass: 'v-input__control'
-      }, [
-        this.genInputSlot(),
-        this.genMessages()
-      ])
-    },
-    genDefaultSlot () {
-      return [
-        this.genLabel(),
-        this.$slots.default
-      ]
-    },
-    // TODO: remove shouldDeprecate (2.0), used for clearIcon
-    genIcon (
-      type: string,
-      cb?: (e: Event) => void,
-      shouldDeprecate = true
-    ) {
-      const icon = (this as any)[`${type}Icon`]
-      const eventName = `click:${kebabCase(type)}`
-      cb = cb || (this as any)[`${type}IconCb`]
-
-      if (shouldDeprecate && type && cb) {
-        deprecate(`:${type}-icon-cb`, `@${eventName}`, this)
-      }
-
-      const data: VNodeData = {
-        props: {
-          color: this.validationState,
-          dark: this.dark,
-          disabled: this.disabled,
-          light: this.light
-        },
-        on: !(this.$listeners[eventName] || cb)
-          ? undefined
-          : {
-            click: (e: Event) => {
-              e.preventDefault()
-              e.stopPropagation()
-
-              this.$emit(eventName, e)
-              cb && cb(e)
-            },
-            // Container has mouseup event that will
-            // trigger menu open if enclosed
-            mouseup: (e: Event) => {
-              e.preventDefault()
-              e.stopPropagation()
-            }
-          }
-      }
-
-      return this.$createElement('div', {
-        staticClass: `v-input__icon v-input__icon--${kebabCase(type)}`,
-        key: `${type}${icon}`
-      }, [
-        this.$createElement(
-          VIcon,
-          data,
-          icon
-        )
-      ])
-    },
-    genInputSlot () {
-      return this.$createElement('div', this.setBackgroundColor(this.backgroundColor, {
-        staticClass: 'v-input__slot',
-        style: { height: convertToUnit(this.height) },
-        directives: this.directivesInput,
-        on: {
-          click: this.onClick,
-          mousedown: this.onMouseDown,
-          mouseup: this.onMouseUp
-        },
-        ref: 'input-slot'
-      }), [this.genDefaultSlot()])
-    },
-    genLabel () {
-      if (!this.hasLabel) return null
-
-      return this.$createElement(VLabel, {
-        props: {
-          color: this.validationState,
-          dark: this.dark,
-          focused: this.hasState,
-          for: this.$attrs.id,
-          light: this.light
-        }
-      }, this.$slots.label || this.label)
-    },
-    genMessages () {
-      if (this.hideDetails) return null
-
-      const messages = this.hasHint
-        ? [this.hint]
-        : this.validations
-
-      return this.$createElement(VMessages, {
-        props: {
-          color: this.hasHint ? '' : this.validationState,
-          dark: this.dark,
-          light: this.light,
-          value: (this.hasMessages || this.hasHint) ? messages : []
-        },
-        scopedSlots: {
-          default: this.$scopedSlots.message
-            ? props => this.$scopedSlots.message!(props)
-            : undefined
-        }
+    function genLabel () {
+      if (!hasLabel.value) return null
+      return h(VLabel, {
+        color: validationState.value,
+        dark: props.dark,
+        focused: hasState.value,
+        for: attrs.id,
+        light: props.light
+      }, {
+        default: () => slots.label ? slots.label() : props.label
       })
-    },
-    genSlot (
-      type: string,
-      location: string,
-      slot: (VNode | VNode[])[]
-    ) {
-      if (!slot.length) return null
-
-      const ref = `${type}-${location}`
-
-      return this.$createElement('div', {
-        staticClass: `v-input__${ref}`,
-        ref
-      }, slot)
-    },
-    genPrependSlot () {
-      const slot = []
-
-      if (this.$slots.prepend) {
-        slot.push(this.$slots.prepend)
-      } else if (this.prependIcon) {
-        slot.push(this.genIcon('prepend'))
-      }
-
-      return this.genSlot('prepend', 'outer', slot)
-    },
-    genAppendSlot () {
-      const slot = []
-
-      // Append icon for text field was really
-      // an appended inner icon, v-text-field
-      // will overwrite this method in order to obtain
-      // backwards compat
-      if (this.$slots.append) {
-        slot.push(this.$slots.append)
-      } else if (this.appendIcon) {
-        slot.push(this.genIcon('append'))
-      }
-
-      return this.genSlot('append', 'outer', slot)
-    },
-    onClick (e: Event) {
-      this.$emit('click', e)
-    },
-    onMouseDown (e: Event) {
-      this.hasMouseDown = true
-      this.$emit('mousedown', e)
-    },
-    onMouseUp (e: Event) {
-      this.hasMouseDown = false
-      this.$emit('mouseup', e)
     }
-  },
 
-  render (h): VNode {
-    return h('div', this.setTextColor(this.validationState, {
-      staticClass: 'v-input',
-      attrs: this.attrsInput,
-      'class': this.classesInput
-    }), this.genContent())
+    function genMessages () {
+      if (props.hideDetails) return null
+      const messages = hasHint.value ? [props.hint] : validations.value
+      return h(VMessages, {
+        color: hasHint.value ? '' : validationState.value,
+        dark: props.dark,
+        light: props.light,
+        value: (hasMessages.value || hasHint.value) ? messages : []
+      }, slots.message ? { default: slots.message } : undefined)
+    }
+
+    function genDefaultSlot () {
+      return [genLabel(), slots.default?.()]
+    }
+
+    function onClick (e: Event) {
+      emit('click', e)
+    }
+    function onMouseDown (e: Event) {
+      hasMouseDown.value = true
+      emit('mousedown', e)
+    }
+    function onMouseUp (e: Event) {
+      hasMouseDown.value = false
+      emit('mouseup', e)
+    }
+
+    function genIcon (type: string, cb?: (e: Event) => void) {
+      const icon = (props as any)[`${type}Icon`]
+      const eventName = `click:${kebabCase(type)}`
+      cb = cb || (props as any)[`${type}IconCb`]
+      const data: any = {
+        color: validationState.value,
+        dark: props.dark,
+        disabled: props.disabled,
+        light: props.light,
+        onClick: (e: Event) => {
+          e.preventDefault()
+          e.stopPropagation()
+          emit(eventName, e)
+          cb && cb(e)
+        }
+      }
+      return h('div', {
+        class: `v-input__icon v-input__icon--${kebabCase(type)}`,
+        key: `${type}${icon}`
+      }, [h(VIcon, data, { default: () => icon })])
+    }
+
+    function genSlot (type: string, location: string, slot: any[]) {
+      if (!slot.length) return null
+      const refName = `${type}-${location}`
+      return h('div', { class: `v-input__${refName}`, ref: refName }, slot)
+    }
+
+    function genPrependSlot () {
+      const slot: any[] = []
+      if (slots.prepend) slot.push(slots.prepend())
+      else if (props.prependIcon) slot.push(genIcon('prepend'))
+      return genSlot('prepend', 'outer', slot)
+    }
+
+    function genAppendSlot () {
+      const slot: any[] = []
+      if (slots.append) slot.push(slots.append())
+      else if (props.appendIcon) slot.push(genIcon('append'))
+      return genSlot('append', 'outer', slot)
+    }
+
+    function genInputSlot () {
+      return h('div', setBackgroundColor(props.backgroundColor, {
+        class: 'v-input__slot',
+        style: { height: convertToUnit(props.height) },
+        on: {
+          click: onClick,
+          mousedown: onMouseDown,
+          mouseup: onMouseUp
+        }
+      }), genDefaultSlot())
+    }
+
+    function genControl () {
+      return h('div', { class: 'v-input__control' }, [
+        genInputSlot(),
+        genMessages()
+      ])
+    }
+
+    function genContent () {
+      return [genPrependSlot(), genControl(), genAppendSlot()]
+    }
+
+    return () => {
+      const data = setTextColor(validationState.value, {
+        class: ['v-input', classesInput.value],
+        ...attrs
+      })
+      return h('div', data, genContent())
+    }
   }
 })
