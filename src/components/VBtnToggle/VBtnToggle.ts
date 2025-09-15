@@ -1,11 +1,13 @@
 // Styles
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-// Mixins
-import ButtonGroup from '../../mixins/button-group'
+// Composables
+import useButtonGroup from '../../composables/useButtonGroup'
 
-/* @vue/component */
-export default ButtonGroup.extend({
+// Types
+import { defineComponent, h, computed } from 'vue'
+
+export default defineComponent({
   name: 'v-btn-toggle',
 
   props: {
@@ -15,14 +17,16 @@ export default ButtonGroup.extend({
     }
   },
 
-  computed: {
-    classes (): object {
-      return {
-        ...ButtonGroup.options.computed.classes.call(this),
-        'v-btn-toggle': true,
-        'v-btn-toggle--only-child': this.selectedItems.length === 1,
-        'v-btn-toggle--selected': this.selectedItems.length > 0
-      }
-    }
+  setup (props, { slots }) {
+    const { selectedItems } = useButtonGroup(props)
+
+    const classes = computed(() => ({
+      'v-btn-toggle': true,
+      'v-btn-toggle--only-child': selectedItems.value.length === 1,
+      'v-btn-toggle--selected': selectedItems.value.length > 0
+    }))
+
+    return () => h('div', { class: classes.value }, slots.default?.())
   }
 })
+
