@@ -27,7 +27,7 @@ The goal is to migrate the codebase from Vue 2 (Options API + Mixins) to Vue 3 (
   - Default export = the composable or component.
 
 - **Language**
-  - Plain JavaScript only, **no TypeScript**.
+  - TypeScript.
 
 ---
 
