@@ -1,81 +1,51 @@
-// Styles
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 import VListGroup from './VListGroup'
 
-// Mixins
-import Themeable from '../../mixins/themeable'
-import { provide as RegistrableProvide } from '../../mixins/registrable'
+// Composables
+import useThemeable, { themeProps } from '../../composables/useThemeable'
+import useRegistrableProvide from '../../composables/useRegistrableProvide'
 
 // Types
-import mixins from '../../util/mixins'
-import { VNode } from 'vue'
+import { defineComponent, h, computed, provide } from 'vue'
 
 type VListGroupInstance = InstanceType<typeof VListGroup>
 
-export default mixins(
-  RegistrableProvide('list'),
-  Themeable
-  /* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-list',
-
-  provide (): object {
-    return {
-      listClick: this.listClick
-    }
-  },
 
   props: {
     dense: Boolean,
     expand: Boolean,
     subheader: Boolean,
     threeLine: Boolean,
-    twoLine: Boolean
+    twoLine: Boolean,
+    ...themeProps
   },
 
-  data: () => ({
-    groups: [] as VListGroupInstance[]
-  }),
+  setup (props, { slots }) {
+    const { themeClasses } = useThemeable(props)
+    const { children: groups } = useRegistrableProvide('list')
 
-  computed: {
-    classes (): object {
-      return {
-        'v-list--dense': this.dense,
-        'v-list--subheader': this.subheader,
-        'v-list--two-line': this.twoLine,
-        'v-list--three-line': this.threeLine,
-        ...this.themeClasses
-      }
-    }
-  },
-
-  methods: {
-    register (content: VListGroupInstance) {
-      this.groups.push(content)
-    },
-    unregister (content: VListGroupInstance) {
-      const index = this.groups.findIndex(g => g._uid === content._uid)
-
-      if (index > -1) this.groups.splice(index, 1)
-    },
-    listClick (uid: number) {
-      if (this.expand) return
-
-      for (const group of this.groups) {
+    function listClick (uid: number) {
+      if (props.expand) return
+      groups.forEach((group: VListGroupInstance) => {
         group.toggle(uid)
-      }
-    }
-  },
-
-  render (h): VNode {
-    const data = {
-      staticClass: 'v-list',
-      class: this.classes,
-      attrs: {
-        role: 'list'
-      }
+      })
     }
 
-    return h('div', data, [this.$slots.default])
+    provide('listClick', listClick)
+
+    const classes = computed(() => ({
+      'v-list--dense': props.dense,
+      'v-list--subheader': props.subheader,
+      'v-list--two-line': props.twoLine,
+      'v-list--three-line': props.threeLine,
+      ...themeClasses.value
+    }))
+
+    return () => h('div', {
+      class: ['v-list', classes.value],
+      role: 'list'
+    }, slots.default?.())
   }
 })
