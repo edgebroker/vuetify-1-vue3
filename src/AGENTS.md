@@ -7,15 +7,10 @@ The goal is to migrate the codebase from Vue 2 (Options API + Mixins) to Vue 3 (
 ---
 
 ## Source Layout
-- **Old sources** are under: `packages/vuetify/src/`
-  - Components: `packages/vuetify/src/components/`
-  - Mixins: `packages/vuetify/src/mixins/`
-  - Directives and locale also exist here
-- **New sources** go into: `src/`
-  - Composables: `src/composables/`
+- All sources reside in `src/`
   - Components: `src/components/`
-
-The old source tree will be removed after conversion.
+  - Composables: `src/composables/`
+  - Directives and locale also exist here
 
 ---
 
@@ -44,10 +39,8 @@ The old source tree will be removed after conversion.
 ---
 
 ## Process
-1. Create new `src/` folder at the repo root.
-2. Convert mixins first → `src/composables/`.
-3. Gradually update components in `src/components/` to use composables.
-4. After all code is moved, remove `packages/vuetify/src/`.
-5. Switch build to Vite.
+1. Convert mixins first → `src/composables/`.
+2. Gradually update components in `src/components/` to use composables.
+3. Switch build to Vite.
 
 ---
