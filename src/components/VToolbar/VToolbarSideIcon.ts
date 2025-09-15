@@ -1,29 +1,22 @@
 import VBtn from '../VBtn'
 import VIcon from '../VIcon'
 
-import Vue from 'vue'
+// Types
+import { defineComponent, h } from 'vue'
 
-/* @vue/component */
-export default Vue.extend({
+export default defineComponent({
   name: 'v-toolbar-side-icon',
 
-  functional: true,
+  setup (_, { attrs, slots }) {
+    return () => {
+      const { class: classAttr, ...restAttrs } = attrs
+      const children = slots.default?.() || [h(VIcon, '$vuetify.icons.menu')]
 
-  render (h, { slots, listeners, props, data }) {
-    const classes = data.staticClass
-      ? `${data.staticClass} v-toolbar__side-icon`
-      : 'v-toolbar__side-icon'
-
-    const d = Object.assign(data, {
-      staticClass: classes,
-      props: Object.assign(props, {
+      return h(VBtn, {
+        class: [classAttr, 'v-toolbar__side-icon'],
+        ...restAttrs,
         icon: true
-      }),
-      on: listeners
-    })
-
-    const defaultSlot = slots().default
-
-    return h(VBtn, d, defaultSlot || [h(VIcon, '$vuetify.icons.menu')])
+      }, children)
+    }
   }
 })

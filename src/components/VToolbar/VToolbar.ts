@@ -1,33 +1,20 @@
 // Styles
 import "@/css/vuetify.css"
 
-// Mixins
-import Applicationable from '../../mixins/applicationable'
-import Colorable from '../../mixins/colorable'
-import Themeable from '../../mixins/themeable'
-import SSRBootable from '../../mixins/ssr-bootable'
+// Composables
+import useApplicationable from '../../composables/useApplicationable'
+import useColorable, { colorProps } from '../../composables/useColorable'
+import useSsrBootable from '../../composables/useSsrBootable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
 
 // Directives
 import Scroll from '../../directives/scroll'
 import { deprecate } from '../../util/console'
 
 // Types
-import mixins from '../../util/mixins'
-import { VNode } from 'vue'
+import { defineComponent, getCurrentInstance, h, computed, ref, watch, onMounted } from 'vue'
 
-export default mixins(
-  Applicationable('top', [
-    'clippedLeft',
-    'clippedRight',
-    'computedHeight',
-    'invertedScroll',
-    'manualScroll'
-  ]),
-  Colorable,
-  SSRBootable,
-  Themeable
-/* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-toolbar',
 
   directives: { Scroll },
@@ -59,208 +46,238 @@ export default mixins(
       type: Number,
       default: 300
     },
-    tabs: Boolean
+    tabs: Boolean,
+    app: Boolean,
+    absolute: Boolean,
+    fixed: Boolean,
+    ...colorProps,
+    ...themeProps
   },
 
-  data: () => ({
-    activeTimeout: null,
-    currentScroll: 0,
-    heights: {
+  setup (props, { slots, attrs }) {
+    const vm = getCurrentInstance()
+    const heights = {
       mobileLandscape: 48,
       mobile: 56,
       desktop: 64,
       dense: 48
-    },
-    isActive: true,
-    isExtended: false,
-    isScrollingUp: false,
-    previousScroll: 0,
-    savedScroll: 0,
-    target: null as Element | null
-  }),
+    }
 
-  computed: {
-    canScroll (): boolean {
-      // TODO: remove
-      if (this.scrollToolbarOffScreen) {
-        deprecate('scrollToolbarOffScreen', 'scrollOffScreen', this)
+    const currentScroll = ref(0)
+    const previousScroll = ref(0)
+    const savedScroll = ref(0)
+    const isScrollingUp = ref(false)
+    const target = ref<Element | null>(null)
+    const isActive = ref(!(props.invertedScroll || props.manualScroll))
+
+    const { setBackgroundColor } = useColorable(props)
+    const { themeClasses } = useThemeable(props)
+    const { isBooted } = useSsrBootable()
+    const { app, applicationProperty } = useApplicationable(props, computed(() => 'top'))
+
+    const isExtended = computed(() => props.extended || !!slots.extension)
+
+    const breakpoint = computed(() => vm?.proxy.$vuetify.breakpoint)
+
+    const canScroll = computed(() => {
+      if (props.scrollToolbarOffScreen) {
+        deprecate('scrollToolbarOffScreen', 'scrollOffScreen', vm?.proxy)
 
         return true
       }
 
-      return this.scrollOffScreen || this.invertedScroll
-    },
-    computedContentHeight (): number {
-      if (this.height) return parseInt(this.height)
-      if (this.dense) return this.heights.dense
+      return props.scrollOffScreen || props.invertedScroll
+    })
 
-      if (this.prominent ||
-        this.$vuetify.breakpoint.mdAndUp
-      ) return this.heights.desktop
+    const computedContentHeight = computed(() => {
+      if (props.height) return parseInt(props.height as any)
+      if (props.dense) return heights.dense
 
-      if (this.$vuetify.breakpoint.smAndDown &&
-        this.$vuetify.breakpoint.width >
-        this.$vuetify.breakpoint.height
-      ) return this.heights.mobileLandscape
+      const bp = breakpoint.value
+      if (!bp) return heights.mobile
 
-      return this.heights.mobile
-    },
-    computedExtensionHeight (): number {
-      if (this.tabs) return 48
-      if (this.extensionHeight) return parseInt(this.extensionHeight)
+      if (props.prominent || bp.mdAndUp) return heights.desktop
 
-      return this.computedContentHeight
-    },
-    computedHeight (): number {
-      if (!this.isExtended) return this.computedContentHeight
+      if (bp.smAndDown && bp.width > bp.height) return heights.mobileLandscape
 
-      return this.computedContentHeight + this.computedExtensionHeight
-    },
-    computedMarginTop (): number {
-      if (!this.app) return 0
+      return heights.mobile
+    })
 
-      return this.$vuetify.application.bar
-    },
-    classes (): object {
-      return {
-        'v-toolbar': true,
-        'elevation-0': this.flat || (
-          !this.isActive &&
-          !this.tabs &&
-          this.canScroll
-        ),
-        'v-toolbar--absolute': this.absolute,
-        'v-toolbar--card': this.card,
-        'v-toolbar--clipped': this.clippedLeft || this.clippedRight,
-        'v-toolbar--dense': this.dense,
-        'v-toolbar--extended': this.isExtended,
-        'v-toolbar--fixed': !this.absolute && (this.app || this.fixed),
-        'v-toolbar--floating': this.floating,
-        'v-toolbar--prominent': this.prominent,
-        ...this.themeClasses
-      }
-    },
-    computedPaddingLeft (): number {
-      if (!this.app || this.clippedLeft) return 0
+    const computedExtensionHeight = computed(() => {
+      if (props.tabs) return 48
+      if (props.extensionHeight) return parseInt(props.extensionHeight as any)
 
-      return this.$vuetify.application.left
-    },
-    computedPaddingRight (): number {
-      if (!this.app || this.clippedRight) return 0
+      return computedContentHeight.value
+    })
 
-      return this.$vuetify.application.right
-    },
-    computedTransform (): number {
-      return !this.isActive
-        ? this.canScroll
-          ? -this.computedContentHeight
-          : -this.computedHeight
-        : 0
-    },
-    currentThreshold (): number {
-      return Math.abs(this.currentScroll - this.savedScroll)
-    },
-    styles (): object {
-      return {
-        marginTop: `${this.computedMarginTop}px`,
-        paddingRight: `${this.computedPaddingRight}px`,
-        paddingLeft: `${this.computedPaddingLeft}px`,
-        transform: `translateY(${this.computedTransform}px)`
-      }
+    const computedHeight = computed(() => {
+      if (!isExtended.value) return computedContentHeight.value
+
+      return computedContentHeight.value + computedExtensionHeight.value
+    })
+
+    const computedMarginTop = computed(() => {
+      if (!app.value) return 0
+
+      return vm?.proxy.$vuetify.application.bar || 0
+    })
+
+    const computedPaddingLeft = computed(() => {
+      if (!app.value || props.clippedLeft) return 0
+
+      return vm?.proxy.$vuetify.application.left || 0
+    })
+
+    const computedPaddingRight = computed(() => {
+      if (!app.value || props.clippedRight) return 0
+
+      return vm?.proxy.$vuetify.application.right || 0
+    })
+
+    const computedTransform = computed(() => {
+      if (isActive.value) return 0
+
+      return canScroll.value
+        ? -computedContentHeight.value
+        : -computedHeight.value
+    })
+
+    const styles = computed(() => ({
+      marginTop: `${computedMarginTop.value}px`,
+      paddingRight: `${computedPaddingRight.value}px`,
+      paddingLeft: `${computedPaddingLeft.value}px`,
+      transform: `translateY(${computedTransform.value}px)`
+    }))
+
+    const classes = computed(() => ({
+      'v-toolbar': true,
+      'elevation-0': props.flat || (!isActive.value && !props.tabs && canScroll.value),
+      'v-toolbar--absolute': props.absolute,
+      'v-toolbar--card': props.card,
+      'v-toolbar--clipped': props.clippedLeft || props.clippedRight,
+      'v-toolbar--dense': props.dense,
+      'v-toolbar--extended': isExtended.value,
+      'v-toolbar--fixed': !props.absolute && (app.value || props.fixed),
+      'v-toolbar--floating': props.floating,
+      'v-toolbar--prominent': props.prominent,
+      ...themeClasses.value
+    }))
+
+    const currentThreshold = computed(() => Math.abs(currentScroll.value - savedScroll.value))
+
+    function updateApplication () {
+      if (props.invertedScroll || props.manualScroll) return 0
+
+      return computedHeight.value
     }
-  },
 
-  watch: {
-    currentThreshold (val: number) {
-      if (this.invertedScroll) {
-        this.isActive = this.currentScroll > this.scrollThreshold
+    function callUpdate () {
+      if (!app.value || !vm) return
+
+      vm.proxy.$vuetify.application.bind(vm.uid, applicationProperty.value, updateApplication())
+    }
+
+    watch(() => props.app, val => {
+      if (val) callUpdate()
+    })
+
+    watch(() => [
+      computedHeight.value,
+      props.clippedLeft,
+      props.clippedRight,
+      props.invertedScroll,
+      props.manualScroll
+    ], () => {
+      callUpdate()
+    }, { immediate: true })
+
+    watch(currentThreshold, val => {
+      if (props.invertedScroll) {
+        isActive.value = currentScroll.value > props.scrollThreshold
         return
       }
 
-      if (val < this.scrollThreshold ||
-        !this.isBooted
-      ) return
+      if (val < props.scrollThreshold || !isBooted.value) return
 
-      this.isActive = this.isScrollingUp
-      this.savedScroll = this.currentScroll
-    },
-    isActive () {
-      this.savedScroll = 0
-    },
-    invertedScroll (val: boolean) {
-      this.isActive = !val
-    },
-    manualScroll (val: boolean) {
-      this.isActive = !val
-    },
-    isScrollingUp () {
-      this.savedScroll = this.savedScroll || this.currentScroll
-    }
-  },
-
-  created () {
-    if (this.invertedScroll ||
-      this.manualScroll
-    ) this.isActive = false
-  },
-
-  mounted () {
-    if (this.scrollTarget) {
-      this.target = document.querySelector(this.scrollTarget)
-    }
-  },
-
-  methods: {
-    onScroll () {
-      if (!this.canScroll ||
-        this.manualScroll ||
-        typeof window === 'undefined'
-      ) return
-
-      this.currentScroll = this.target
-        ? this.target.scrollTop
-        : window.pageYOffset
-
-      this.isScrollingUp = this.currentScroll < this.previousScroll
-
-      this.previousScroll = this.currentScroll
-    },
-    updateApplication (): number {
-      return this.invertedScroll || this.manualScroll
-        ? 0
-        : this.computedHeight
-    }
-  },
-
-  render (h): VNode {
-    this.isExtended = this.extended || !!this.$slots.extension
-
-    const children = []
-    const data = this.setBackgroundColor(this.color, {
-      'class': this.classes,
-      style: this.styles,
-      on: this.$listeners
+      isActive.value = isScrollingUp.value
+      savedScroll.value = currentScroll.value
     })
 
-    data.directives = [{
-      arg: this.scrollTarget,
-      name: 'scroll',
-      value: this.onScroll
-    }]
+    watch(isActive, () => {
+      savedScroll.value = 0
+      callUpdate()
+    })
 
-    children.push(h('div', {
-      staticClass: 'v-toolbar__content',
-      style: { height: `${this.computedContentHeight}px` },
-      ref: 'content'
-    }, this.$slots.default))
+    watch(() => props.invertedScroll, val => {
+      isActive.value = !val
+      callUpdate()
+    })
 
-    if (this.isExtended) {
-      children.push(h('div', {
-        staticClass: 'v-toolbar__extension',
-        style: { height: `${this.computedExtensionHeight}px` }
-      }, this.$slots.extension))
+    watch(() => props.manualScroll, val => {
+      isActive.value = !val
+      callUpdate()
+    })
+
+    watch(isScrollingUp, () => {
+      savedScroll.value = savedScroll.value || currentScroll.value
+    })
+
+    function onScroll () {
+      if (!canScroll.value || props.manualScroll || typeof window === 'undefined') return
+
+      currentScroll.value = target.value
+        ? (target.value as HTMLElement).scrollTop
+        : window.pageYOffset
+
+      isScrollingUp.value = currentScroll.value < previousScroll.value
+
+      previousScroll.value = currentScroll.value
     }
 
-    return h('nav', data, children)
+    watch(() => props.scrollTarget, val => {
+      if (typeof document === 'undefined') {
+        target.value = null
+        return
+      }
+
+      target.value = val ? document.querySelector(val) : null
+    }, { immediate: true })
+
+    onMounted(() => {
+      callUpdate()
+    })
+
+    return () => {
+      const { class: classAttr, style: styleAttr, ...restAttrs } = attrs
+      const defaultSlot = slots.default?.()
+      const extensionSlot = slots.extension?.()
+
+      const data = setBackgroundColor(props.color, {
+        class: [classes.value, classAttr],
+        style: [styles.value, styleAttr],
+        ...restAttrs,
+        directives: [{
+          arg: props.scrollTarget,
+          name: 'scroll',
+          value: onScroll
+        }]
+      })
+
+      const children = [
+        h('div', {
+          staticClass: 'v-toolbar__content',
+          style: { height: `${computedContentHeight.value}px` }
+        }, defaultSlot)
+      ]
+
+      if (isExtended.value || extensionSlot) {
+        children.push(h('div', {
+          staticClass: 'v-toolbar__extension',
+          style: { height: `${computedExtensionHeight.value}px` }
+        }, extensionSlot))
+      }
+
+      return h('nav', data, children)
+    }
   }
 })
