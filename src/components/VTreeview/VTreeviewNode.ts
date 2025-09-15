@@ -1,25 +1,14 @@
 // Components
 import { VExpandTransition } from '../transitions'
 import { VIcon } from '../VIcon'
-import VTreeview from './VTreeview'
-import VTreeviewNode from './VTreeviewNode'
 
-// Mixins
-import { inject as RegistrableInject } from '../../mixins/registrable'
+// Composables
+import useRegistrableInject from '../../composables/useRegistrableInject'
 
 // Utils
-import mixins from '../../util/mixins'
 import { getObjectValueByPath } from '../../util/helpers'
-import { PropValidator } from 'vue/types/options'
-
-// Types
-import Vue, { VNode } from 'vue'
-
-type VTreeViewInstance = InstanceType<typeof VTreeview>
-
-interface options extends Vue {
-  treeview: VTreeViewInstance
-}
+import { defineComponent, h, ref, computed, getCurrentInstance, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import type { PropType } from 'vue'
 
 export const VTreeviewNodeProps = {
   activatable: Boolean,
@@ -64,227 +53,253 @@ export const VTreeviewNodeProps = {
     type: String,
     default: 'children'
   },
-  loadChildren: Function as PropValidator<(item: any) => Promise<void>>,
+  loadChildren: Function as PropType<(item: any) => Promise<void>>,
   openOnClick: Boolean,
   transition: Boolean
 }
 
-export default mixins<options>(
-  RegistrableInject('treeview')
-  /* @vue/component */
-).extend({
-  name: 'v-treeview-node',
+export type TreeviewProvide = {
+  register: (node: VTreeviewNodeInstance) => void
+  unregister: (node: VTreeviewNodeInstance) => void
+  updateOpen: (key: string | number, value: boolean) => void
+  emitOpen: () => void
+  updateSelected: (key: string | number, value: boolean) => void
+  emitSelected: () => void
+  updateActive: (key: string | number, value: boolean) => void
+  emitActive: () => void
+  isExcluded: (key: string | number) => boolean
+}
 
-  inject: {
-    treeview: {
-      default: null
-    }
-  },
+const VTreeviewNode = defineComponent({
+  name: 'v-treeview-node',
 
   props: {
     item: {
-      type: Object,
+      type: Object as PropType<any>,
       default: () => null
     },
     ...VTreeviewNodeProps
   },
 
-  data: () => ({
-    isOpen: false, // Node is open/expanded
-    isSelected: false, // Node is selected (checkbox)
-    isIndeterminate: false, // Node has at least one selected child
-    isActive: false, // Node is selected (row)
-    isLoading: false,
-    hasLoaded: false
-  }),
+  setup (props, { slots }) {
+    const treeview = useRegistrableInject('treeview', 'v-treeview-node', 'v-treeview') as TreeviewProvide | null
+    const vm = getCurrentInstance()
 
-  computed: {
-    key (): string {
-      return getObjectValueByPath(this.item, this.itemKey)
-    },
-    children (): any[] | null {
-      return getObjectValueByPath(this.item, this.itemChildren)
-    },
-    text (): string {
-      return getObjectValueByPath(this.item, this.itemText)
-    },
-    scopedProps (): object {
-      return {
-        item: this.item,
-        leaf: !this.children,
-        selected: this.isSelected,
-        indeterminate: this.isIndeterminate,
-        active: this.isActive,
-        open: this.isOpen
-      }
-    },
-    computedIcon (): string {
-      if (this.isIndeterminate) return this.indeterminateIcon
-      else if (this.isSelected) return this.onIcon
-      else return this.offIcon
-    },
-    hasChildren (): boolean {
-      return !!this.children && (!!this.children.length || !!this.loadChildren)
-    }
-  },
+    const isOpen = ref(false)
+    const isSelected = ref(false)
+    const isIndeterminate = ref(false)
+    const isActive = ref(false)
+    const isLoading = ref(false)
+    const hasLoaded = ref(false)
 
-  created () {
-    this.treeview.register(this)
-  },
+    const key = computed(() => getObjectValueByPath(props.item, props.itemKey))
+    const children = computed<any[] | null>(() => getObjectValueByPath(props.item, props.itemChildren))
+    const text = computed(() => getObjectValueByPath(props.item, props.itemText))
 
-  beforeDestroy () {
-    this.treeview.unregister(this)
-  },
+    const scopedProps = computed(() => ({
+      item: props.item,
+      leaf: !children.value,
+      selected: isSelected.value,
+      indeterminate: isIndeterminate.value,
+      active: isActive.value,
+      open: isOpen.value
+    }))
 
-  methods: {
-    checkChildren (): Promise<void> {
-      return new Promise<void>(resolve => {
-        // TODO: Potential issue with always trying
-        // to load children if response is empty?
-        if (!this.children || this.children.length || !this.loadChildren || this.hasLoaded) return resolve()
+    const computedIcon = computed(() => {
+      if (isIndeterminate.value) return props.indeterminateIcon
+      if (isSelected.value) return props.onIcon
+      return props.offIcon
+    })
 
-        this.isLoading = true
-        resolve(this.loadChildren(this.item))
+    const hasChildren = computed(() => {
+      return !!children.value && (!!children.value.length || !!props.loadChildren)
+    })
+
+    function checkChildren (): Promise<void> {
+      return new Promise(resolve => {
+        if (!children.value || children.value.length || !props.loadChildren || hasLoaded.value) {
+          resolve()
+          return
+        }
+
+        isLoading.value = true
+        resolve(props.loadChildren(props.item))
       }).then(() => {
-        this.isLoading = false
-        this.hasLoaded = true
+        isLoading.value = false
+        hasLoaded.value = true
       })
-    },
-    open () {
-      this.isOpen = !this.isOpen
-      this.treeview.updateOpen(this.key, this.isOpen)
-      this.treeview.emitOpen()
-    },
-    genLabel () {
-      const children = []
+    }
 
-      if (this.$scopedSlots.label) children.push(this.$scopedSlots.label(this.scopedProps))
-      else children.push(this.text)
+    function open () {
+      isOpen.value = !isOpen.value
+      treeview && treeview.updateOpen(key.value, isOpen.value)
+      treeview && treeview.emitOpen()
+    }
 
-      return this.$createElement('div', {
+    function genLabel () {
+      const content = []
+      if (slots.label) content.push(slots.label(scopedProps.value))
+      else content.push(text.value)
+
+      return h('div', {
         slot: 'label',
         staticClass: 'v-treeview-node__label'
-      }, children)
-    },
-    genContent () {
-      const children = [
-        this.$scopedSlots.prepend && this.$scopedSlots.prepend(this.scopedProps),
-        this.genLabel(),
-        this.$scopedSlots.append && this.$scopedSlots.append(this.scopedProps)
+      }, content)
+    }
+
+    function genContent () {
+      const content = [
+        slots.prepend && slots.prepend(scopedProps.value),
+        genLabel(),
+        slots.append && slots.append(scopedProps.value)
       ]
 
-      return this.$createElement('div', {
+      return h('div', {
         staticClass: 'v-treeview-node__content'
-      }, children)
-    },
-    genToggle () {
-      return this.$createElement(VIcon, {
+      }, content)
+    }
+
+    function genToggle () {
+      return h(VIcon, {
         staticClass: 'v-treeview-node__toggle',
         class: {
-          'v-treeview-node__toggle--open': this.isOpen,
-          'v-treeview-node__toggle--loading': this.isLoading
+          'v-treeview-node__toggle--open': isOpen.value,
+          'v-treeview-node__toggle--loading': isLoading.value
         },
         slot: 'prepend',
         on: {
           click: (e: MouseEvent) => {
             e.stopPropagation()
-
-            if (this.isLoading) return
-
-            this.checkChildren().then(() => this.open())
+            if (isLoading.value) return
+            checkChildren().then(() => open())
           }
         }
-      }, [this.isLoading ? this.loadingIcon : this.expandIcon])
-    },
-    genCheckbox () {
-      return this.$createElement(VIcon, {
+      }, [isLoading.value ? props.loadingIcon : props.expandIcon])
+    }
+
+    function genCheckbox () {
+      return h(VIcon, {
         staticClass: 'v-treeview-node__checkbox',
         props: {
-          color: this.isSelected ? this.selectedColor : undefined
+          color: isSelected.value ? props.selectedColor : undefined
         },
         on: {
           click: (e: MouseEvent) => {
             e.stopPropagation()
-
-            if (this.isLoading) return
-
-            this.checkChildren().then(() => {
-              // We nextTick here so that items watch in VTreeview has a chance to run first
-              this.$nextTick(() => {
-                this.isSelected = !this.isSelected
-                this.isIndeterminate = false
-
-                this.treeview.updateSelected(this.key, this.isSelected)
-                this.treeview.emitSelected()
+            if (isLoading.value) return
+            checkChildren().then(() => {
+              nextTick(() => {
+                isSelected.value = !isSelected.value
+                isIndeterminate.value = false
+                treeview && treeview.updateSelected(key.value, isSelected.value)
+                treeview && treeview.emitSelected()
               })
             })
           }
         }
-      }, [this.computedIcon])
-    },
-    genNode (): VNode {
-      const children = [this.genContent()]
+      }, [computedIcon.value])
+    }
 
-      if (this.selectable) children.unshift(this.genCheckbox())
-      if (this.hasChildren) children.unshift(this.genToggle())
+    function genNode () {
+      const childrenNodes = [genContent()]
+      if (props.selectable) childrenNodes.unshift(genCheckbox())
+      if (hasChildren.value) childrenNodes.unshift(genToggle())
 
-      return this.$createElement('div', {
+      return h('div', {
         staticClass: 'v-treeview-node__root',
         class: {
-          [this.activeClass]: this.isActive
+          [props.activeClass]: isActive.value
         },
         on: {
           click: () => {
-            if (this.openOnClick && this.children) {
-              this.open()
-            } else if (this.activatable) {
-              this.isActive = !this.isActive
-              this.treeview.updateActive(this.key, this.isActive)
-              this.treeview.emitActive()
+            if (props.openOnClick && children.value) {
+              open()
+            } else if (props.activatable) {
+              isActive.value = !isActive.value
+              treeview && treeview.updateActive(key.value, isActive.value)
+              treeview && treeview.emitActive()
             }
           }
         }
-      }, children)
-    },
-    genChild (item: any): VNode {
-      return this.$createElement(VTreeviewNode, {
-        key: getObjectValueByPath(item, this.itemKey),
+      }, childrenNodes)
+    }
+
+    function genChild (item: any) {
+      return h(VTreeviewNode, {
+        key: getObjectValueByPath(item, props.itemKey),
         props: {
-          activatable: this.activatable,
-          activeClass: this.activeClass,
+          activatable: props.activatable,
+          activeClass: props.activeClass,
           item,
-          selectable: this.selectable,
-          selectedColor: this.selectedColor,
-          expandIcon: this.expandIcon,
-          indeterminateIcon: this.indeterminateIcon,
-          offIcon: this.offIcon,
-          onIcon: this.onIcon,
-          loadingIcon: this.loadingIcon,
-          itemKey: this.itemKey,
-          itemText: this.itemText,
-          itemChildren: this.itemChildren,
-          loadChildren: this.loadChildren,
-          transition: this.transition,
-          openOnClick: this.openOnClick
+          selectable: props.selectable,
+          selectedColor: props.selectedColor,
+          expandIcon: props.expandIcon,
+          indeterminateIcon: props.indeterminateIcon,
+          offIcon: props.offIcon,
+          onIcon: props.onIcon,
+          loadingIcon: props.loadingIcon,
+          itemKey: props.itemKey,
+          itemText: props.itemText,
+          itemChildren: props.itemChildren,
+          loadChildren: props.loadChildren,
+          transition: props.transition,
+          openOnClick: props.openOnClick
         },
-        scopedSlots: this.$scopedSlots
+        scopedSlots: slots
       })
-    },
-    genChildrenWrapper (): any {
-      if (!this.isOpen || !this.children) return null
+    }
 
-      const children = [this.children.map(this.genChild)]
-
-      return this.$createElement('div', {
+    function genChildrenWrapper () {
+      if (!isOpen.value || !children.value) return null
+      return h('div', {
         staticClass: 'v-treeview-node__children'
-      }, children)
-    },
-    genTransition () {
-      return this.$createElement(VExpandTransition, [this.genChildrenWrapper()])
+      }, [children.value.map(genChild)])
+    }
+
+    function genTransition () {
+      return h(VExpandTransition, [genChildrenWrapper()])
+    }
+
+    onMounted(() => {
+      if (treeview && vm?.proxy) {
+        treeview.register(vm.proxy as VTreeviewNodeInstance)
+      }
+    })
+
+    onBeforeUnmount(() => {
+      if (treeview && vm?.proxy) {
+        treeview.unregister(vm.proxy as VTreeviewNodeInstance)
+      }
+    })
+
+    return {
+      isOpen,
+      isSelected,
+      isIndeterminate,
+      isActive,
+      isLoading,
+      hasLoaded,
+      key,
+      children,
+      text,
+      scopedProps,
+      computedIcon,
+      hasChildren,
+      checkChildren,
+      open,
+      genLabel,
+      genContent,
+      genToggle,
+      genCheckbox,
+      genNode,
+      genChild,
+      genChildrenWrapper,
+      genTransition,
+      treeview
     }
   },
 
-  render (h): VNode {
+  render () {
     const children = [this.genNode()]
 
     if (this.transition) children.push(this.genTransition())
@@ -296,8 +311,12 @@ export default mixins<options>(
         'v-treeview-node--leaf': !this.hasChildren,
         'v-treeview-node--click': this.openOnClick,
         'v-treeview-node--selected': this.isSelected,
-        'v-treeview-node--excluded': this.treeview.isExcluded(this.key)
+        'v-treeview-node--excluded': this.treeview && this.treeview.isExcluded(this.key)
       }
     }, children)
   }
 })
+
+export type VTreeviewNodeInstance = InstanceType<typeof VTreeviewNode>
+
+export default VTreeviewNode
