@@ -35,7 +35,8 @@ export default defineComponent({
     useButtonGroup(props)
 
     const computedHeight = computed(() => parseInt(props.height as any))
-    useApplicationable(props, computed(() => props.value ? computedHeight.value : 0), ['height', 'value'])
+    const { setUpdateApplication } = useApplicationable(props, 'bottom', ['height', 'value'])
+    setUpdateApplication(() => props.value ? computedHeight.value : 0)
 
     const classes = computed(() => ({
       'v-bottom-nav--absolute': props.absolute,

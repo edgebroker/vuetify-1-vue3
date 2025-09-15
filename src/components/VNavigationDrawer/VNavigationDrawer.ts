@@ -1,38 +1,26 @@
 // Styles
 import "@/css/vuetify.css"
 
-// Mixins
-import Applicationable from '../../mixins/applicationable'
-import Dependent from '../../mixins/dependent'
-import Overlayable from '../../mixins/overlayable'
-import SSRBootable from '../../mixins/ssr-bootable'
-import Themeable from '../../mixins/themeable'
-
 // Directives
 import ClickOutside from '../../directives/click-outside'
 import Resize from '../../directives/resize'
 import Touch, { TouchWrapper } from '../../directives/touch'
 
+// Composables
+import useApplicationable from '../../composables/useApplicationable'
+import useDependent from '../../composables/useDependent'
+import useOverlayable, { overlayableProps } from '../../composables/useOverlayable'
+import useSsrBootable from '../../composables/useSsrBootable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
+import { positionPropsFactory } from '../../composables/usePositionable'
+
 // Utilities
 import { convertToUnit } from '../../util/helpers'
-import mixins from '../../util/mixins'
 
-// TYpes
-import { VNode } from 'vue/types/vnode'
-import { PropValidator } from 'vue/types/options'
+// Types
+import { defineComponent, h, ref, reactive, computed, watch, onBeforeMount, getCurrentInstance, PropType } from 'vue'
 
-export default mixins(
-  Applicationable('left', [
-    'miniVariant',
-    'right',
-    'width'
-  ]),
-  Dependent,
-  Overlayable,
-  SSRBootable,
-  Themeable
-/* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-navigation-drawer',
 
   directives: {
@@ -42,21 +30,25 @@ export default mixins(
   },
 
   props: {
+    app: Boolean,
+    ...positionPropsFactory(['absolute', 'fixed']),
+    ...overlayableProps,
+    ...themeProps,
     clipped: Boolean,
     disableRouteWatcher: Boolean,
     disableResizeWatcher: Boolean,
     height: {
-      type: [Number, String],
+      type: [Number, String] as PropType<number | string>,
       default: '100%'
     },
     floating: Boolean,
     miniVariant: Boolean,
     miniVariantWidth: {
-      type: [Number, String],
+      type: [Number, String] as PropType<number | string>,
       default: 80
     },
     mobileBreakPoint: {
-      type: [Number, String],
+      type: [Number, String] as PropType<number | string>,
       default: 1264
     },
     permanent: Boolean,
@@ -65,293 +57,257 @@ export default mixins(
     temporary: Boolean,
     touchless: Boolean,
     width: {
-      type: [Number, String],
+      type: [Number, String] as PropType<number | string>,
       default: 300
     },
-    value: { required: false } as PropValidator<any>
-  },
-
-  data: () => ({
-    isActive: false,
-    touchArea: {
-      left: 0,
-      right: 0
-    }
-  }),
-
-  computed: {
-    /**
-     * Used for setting an app value from a dynamic
-     * property. Called from applicationable.js
-     */
-    applicationProperty (): string {
-      return this.right ? 'right' : 'left'
-    },
-    calculatedTransform (): number {
-      if (this.isActive) return 0
-
-      return this.right
-        ? this.calculatedWidth
-        : -this.calculatedWidth
-    },
-    calculatedWidth (): number {
-      return parseInt(
-        this.miniVariant
-          ? this.miniVariantWidth
-          : this.width
-      )
-    },
-    classes (): object {
-      return {
-        'v-navigation-drawer': true,
-        'v-navigation-drawer--absolute': this.absolute,
-        'v-navigation-drawer--clipped': this.clipped,
-        'v-navigation-drawer--close': !this.isActive,
-        'v-navigation-drawer--fixed': !this.absolute && (this.app || this.fixed),
-        'v-navigation-drawer--floating': this.floating,
-        'v-navigation-drawer--is-mobile': this.isMobile,
-        'v-navigation-drawer--mini-variant': this.miniVariant,
-        'v-navigation-drawer--open': this.isActive,
-        'v-navigation-drawer--right': this.right,
-        'v-navigation-drawer--temporary': this.temporary,
-        ...this.themeClasses
-      }
-    },
-    hasApp (): boolean {
-      return this.app &&
-        (!this.isMobile && !this.temporary)
-    },
-    isMobile (): boolean {
-      return !this.stateless &&
-        !this.permanent &&
-        !this.temporary &&
-        this.$vuetify.breakpoint.width < parseInt(this.mobileBreakPoint, 10)
-    },
-    marginTop (): number {
-      if (!this.hasApp) return 0
-
-      let marginTop = this.$vuetify.application.bar
-
-      marginTop += this.clipped
-        ? this.$vuetify.application.top
-        : 0
-
-      return marginTop
-    },
-    maxHeight (): number | null {
-      if (!this.hasApp) return null
-
-      const maxHeight = (
-        this.$vuetify.application.bottom +
-        this.$vuetify.application.footer +
-        this.$vuetify.application.bar
-      )
-
-      if (!this.clipped) return maxHeight
-
-      return maxHeight + this.$vuetify.application.top
-    },
-    reactsToClick (): boolean {
-      return !this.stateless &&
-        !this.permanent &&
-        (this.isMobile || this.temporary)
-    },
-    reactsToMobile (): boolean {
-      return !this.disableResizeWatcher &&
-        !this.stateless &&
-        !this.permanent &&
-        !this.temporary
-    },
-    reactsToRoute (): boolean {
-      return !this.disableRouteWatcher &&
-        !this.stateless &&
-        (this.temporary || this.isMobile)
-    },
-    resizeIsDisabled (): boolean {
-      return this.disableResizeWatcher || this.stateless
-    },
-    showOverlay (): boolean {
-      return this.isActive &&
-        (this.isMobile || this.temporary)
-    },
-    styles (): object {
-      const styles = {
-        height: convertToUnit(this.height),
-        marginTop: `${this.marginTop}px`,
-        maxHeight: this.maxHeight != null ? `calc(100% - ${+this.maxHeight}px)` : undefined,
-        transform: `translateX(${this.calculatedTransform}px)`,
-        width: `${this.calculatedWidth}px`
-      }
-
-      return styles
+    value: {
+      type: null as PropType<any>,
+      required: false
     }
   },
 
-  watch: {
-    $route () {
-      if (this.reactsToRoute && this.closeConditional()) {
-        this.isActive = false
-      }
-    },
-    isActive (val) {
-      this.$emit('input', val)
-      this.callUpdate()
-    },
-    /**
-     * When mobile changes, adjust the active state
-     * only when there has been a previous value
-     */
-    isMobile (val, prev) {
-      !val &&
-        this.isActive &&
-        !this.temporary &&
-        this.removeOverlay()
+  setup (props, { emit, slots }) {
+    useSsrBootable()
+    const vm = getCurrentInstance()
+    const drawer = ref<HTMLElement | null>(null)
+    const touchArea = reactive({ left: 0, right: 0 })
 
-      if (prev == null ||
-        this.resizeIsDisabled ||
-        !this.reactsToMobile
-      ) return
+    const { themeClasses } = useThemeable(props)
+    const dependent = useDependent()
+    const { isActive, getOpenDependentElements } = dependent
 
-      this.isActive = !val
-      this.callUpdate()
-    },
-    permanent (val) {
-      // If enabling prop enable the drawer
-      if (val) {
-        this.isActive = true
-      }
-      this.callUpdate()
-    },
-    showOverlay (val) {
-      if (val) this.genOverlay()
-      else this.removeOverlay()
-    },
-    temporary () {
-      this.callUpdate()
-    },
-    value (val) {
-      if (this.permanent) return
+    const applicationProperty = computed(() => (props.right ? 'right' : 'left'))
+    const { app, callUpdate, setUpdateApplication } = useApplicationable(props, applicationProperty, ['miniVariant', 'right', 'width'])
 
-      // TODO: referring to this directly causes type errors
-      // all over the place for some reason
-      const _this = this as any
-      if (val == null) return _this.init()
+    const { genOverlay, removeOverlay } = useOverlayable(props, {
+      absolute: computed(() => props.absolute),
+      isActive
+    })
 
-      if (val !== this.isActive) this.isActive = val
+    const calculatedWidth = computed(() => {
+      const source = props.miniVariant ? props.miniVariantWidth : props.width
+      return parseInt(source as any, 10)
+    })
+
+    const calculatedTransform = computed(() => {
+      if (isActive.value) return 0
+
+      return props.right
+        ? calculatedWidth.value
+        : -calculatedWidth.value
+    })
+
+    const isMobile = computed(() => {
+      if (props.stateless || props.permanent || props.temporary) return false
+
+      const breakpointWidth = parseInt(props.mobileBreakPoint as any, 10)
+      const currentWidth = vm?.proxy.$vuetify.breakpoint.width || 0
+
+      return currentWidth < breakpointWidth
+    })
+
+    const hasApp = computed(() => app.value && (!isMobile.value && !props.temporary))
+
+    const marginTop = computed(() => {
+      if (!hasApp.value) return 0
+
+      let margin = vm?.proxy.$vuetify.application.bar
+      if (props.clipped) margin += vm?.proxy.$vuetify.application.top
+      return margin
+    })
+
+    const maxHeight = computed(() => {
+      if (!hasApp.value) return null
+
+      const application = vm?.proxy.$vuetify.application
+      const base = application.bottom + application.footer + application.bar
+
+      return props.clipped ? base + application.top : base
+    })
+
+    const reactsToClick = computed(() => !props.stateless && !props.permanent && (isMobile.value || props.temporary))
+    const reactsToMobile = computed(() => !props.disableResizeWatcher && !props.stateless && !props.permanent && !props.temporary)
+    const reactsToRoute = computed(() => !props.disableRouteWatcher && !props.stateless && (props.temporary || isMobile.value))
+    const resizeIsDisabled = computed(() => props.disableResizeWatcher || props.stateless)
+
+    const showOverlay = computed(() => isActive.value && (isMobile.value || props.temporary))
+
+    const styles = computed(() => ({
+      height: convertToUnit(props.height),
+      marginTop: `${marginTop.value}px`,
+      maxHeight: maxHeight.value != null ? `calc(100% - ${+maxHeight.value}px)` : undefined,
+      transform: `translateX(${calculatedTransform.value}px)`,
+      width: `${calculatedWidth.value}px`
+    }))
+
+    const classes = computed(() => ({
+      'v-navigation-drawer': true,
+      'v-navigation-drawer--absolute': props.absolute,
+      'v-navigation-drawer--clipped': props.clipped,
+      'v-navigation-drawer--close': !isActive.value,
+      'v-navigation-drawer--fixed': !props.absolute && (app.value || props.fixed),
+      'v-navigation-drawer--floating': props.floating,
+      'v-navigation-drawer--is-mobile': isMobile.value,
+      'v-navigation-drawer--mini-variant': props.miniVariant,
+      'v-navigation-drawer--open': isActive.value,
+      'v-navigation-drawer--right': props.right,
+      'v-navigation-drawer--temporary': props.temporary,
+      ...themeClasses.value
+    }))
+
+    setUpdateApplication(() => {
+      return !isActive.value || props.temporary || isMobile.value
+        ? 0
+        : calculatedWidth.value
+    })
+
+    function calculateTouchArea () {
+      const parent = drawer.value?.parentElement
+      if (!parent) return
+
+      const parentRect = parent.getBoundingClientRect()
+      touchArea.left = parentRect.left + 50
+      touchArea.right = parentRect.right - 50
     }
-  },
 
-  beforeMount () {
-    this.init()
-  },
+    function closeConditional () {
+      return isActive.value && !(vm?.isUnmounted) && reactsToClick.value
+    }
 
-  methods: {
-    calculateTouchArea () {
-      if (!this.$el.parentNode) return
-      const parentRect = (this.$el.parentNode as Element).getBoundingClientRect()
-
-      this.touchArea = {
-        left: parentRect.left + 50,
-        right: parentRect.right - 50
-      }
-    },
-    closeConditional () {
-      return this.isActive && !this._isDestroyed && this.reactsToClick
-    },
-    genDirectives () {
-      const directives = [{
+    function genDirectives () {
+      const directives: any[] = [{
         name: 'click-outside',
-        value: () => (this.isActive = false),
+        value: () => { isActive.value = false },
         args: {
-          closeConditional: this.closeConditional,
-          include: this.getOpenDependentElements
+          closeConditional,
+          include: getOpenDependentElements
         }
       }]
 
-      !this.touchless && directives.push({
-        name: 'touch',
-        value: {
-          parent: true,
-          left: this.swipeLeft,
-          right: this.swipeRight
-        }
-      } as any)
+      if (!props.touchless) {
+        directives.push({
+          name: 'touch',
+          value: {
+            parent: true,
+            left: swipeLeft,
+            right: swipeRight
+          }
+        })
+      }
 
       return directives
-    },
-    /**
-     * Sets state before mount to avoid
-     * entry transitions in SSR
-     */
-    init () {
-      if (this.permanent) {
-        this.isActive = true
-      } else if (this.stateless ||
-        this.value != null
-      ) {
-        this.isActive = this.value
-      } else if (!this.temporary) {
-        this.isActive = !this.isMobile
-      }
-    },
-    swipeRight (e: TouchWrapper) {
-      if (this.isActive && !this.right) return
-      this.calculateTouchArea()
-
-      if (Math.abs(e.touchendX - e.touchstartX) < 100) return
-      if (!this.right &&
-        e.touchstartX <= this.touchArea.left
-      ) this.isActive = true
-      else if (this.right && this.isActive) this.isActive = false
-    },
-    swipeLeft (e: TouchWrapper) {
-      if (this.isActive && this.right) return
-      this.calculateTouchArea()
-
-      if (Math.abs(e.touchendX - e.touchstartX) < 100) return
-      if (this.right &&
-        e.touchstartX >= this.touchArea.right
-      ) this.isActive = true
-      else if (!this.right && this.isActive) this.isActive = false
-    },
-    /**
-     * Update the application layout
-     */
-    updateApplication () {
-      return !this.isActive ||
-        this.temporary ||
-        this.isMobile
-        ? 0
-        : this.calculatedWidth
     }
-  },
 
-  render (h): VNode {
-    const data = {
-      'class': this.classes,
-      style: this.styles,
-      directives: this.genDirectives(),
-      on: {
-        click: () => {
-          if (!this.miniVariant) return
+    function init () {
+      if (props.permanent) {
+        isActive.value = true
+      } else if (props.stateless || props.value != null) {
+        isActive.value = Boolean(props.value)
+      } else if (!props.temporary) {
+        isActive.value = !isMobile.value
+      }
+    }
 
-          this.$emit('update:miniVariant', false)
-        },
-        transitionend: (e: Event) => {
-          if (e.target !== e.currentTarget) return
-          this.$emit('transitionend', e)
+    function swipeRight (e: TouchWrapper) {
+      if (isActive.value && !props.right) return
+      calculateTouchArea()
 
-          // IE11 does not support new Event('resize')
-          const resizeEvent = document.createEvent('UIEvents')
-          resizeEvent.initUIEvent('resize', true, false, window, 0)
-          window.dispatchEvent(resizeEvent)
+      if (Math.abs(e.touchendX - e.touchstartX) < 100) return
+      if (!props.right && e.touchstartX <= touchArea.left) {
+        isActive.value = true
+      } else if (props.right && isActive.value) {
+        isActive.value = false
+      }
+    }
+
+    function swipeLeft (e: TouchWrapper) {
+      if (isActive.value && props.right) return
+      calculateTouchArea()
+
+      if (Math.abs(e.touchendX - e.touchstartX) < 100) return
+      if (props.right && e.touchstartX >= touchArea.right) {
+        isActive.value = true
+      } else if (!props.right && isActive.value) {
+        isActive.value = false
+      }
+    }
+
+    watch(() => vm?.proxy?.$route, () => {
+      if (reactsToRoute.value && closeConditional()) {
+        isActive.value = false
+      }
+    })
+
+    watch(isActive, val => {
+      emit('input', val)
+      callUpdate()
+    })
+
+    watch(isMobile, (val, prev) => {
+      if (!val && isActive.value && !props.temporary) {
+        removeOverlay()
+      }
+
+      if (prev == null || resizeIsDisabled.value || !reactsToMobile.value) return
+
+      isActive.value = !val
+      callUpdate()
+    })
+
+    watch(() => props.permanent, val => {
+      if (val) {
+        isActive.value = true
+      }
+      callUpdate()
+    })
+
+    watch(showOverlay, val => {
+      if (val) genOverlay()
+      else removeOverlay()
+    })
+
+    watch(() => props.temporary, () => {
+      callUpdate()
+    })
+
+    watch(() => props.value, val => {
+      if (props.permanent) return
+      if (val == null) return init()
+
+      if (val !== isActive.value) isActive.value = val
+    })
+
+    onBeforeMount(() => {
+      init()
+    })
+
+    return () => {
+      const data = {
+        class: classes.value,
+        style: styles.value,
+        directives: genDirectives(),
+        ref: drawer,
+        on: {
+          click: () => {
+            if (!props.miniVariant) return
+
+            emit('update:miniVariant', false)
+          },
+          transitionend: (e: Event) => {
+            if (e.target !== e.currentTarget) return
+            emit('transitionend', e)
+
+            const resizeEvent = document.createEvent('UIEvents')
+            resizeEvent.initUIEvent('resize', true, false, window, 0)
+            window.dispatchEvent(resizeEvent)
+          }
         }
       }
-    }
 
-    return h('aside', data, [
-      this.$slots.default,
-      h('div', { 'class': 'v-navigation-drawer__border' })
-    ])
+      return h('aside', data, [
+        slots.default?.(),
+        h('div', { class: 'v-navigation-drawer__border' })
+      ])
+    }
   }
 })

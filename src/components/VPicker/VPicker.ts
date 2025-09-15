@@ -1,18 +1,16 @@
 import "@/css/vuetify.css"
 
-// Mixins
-import Colorable from '../../mixins/colorable'
-import Themeable from '../../mixins/themeable'
+// Composables
+import useColorable, { colorProps } from '../../composables/useColorable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
 
 // Helpers
 import { convertToUnit } from '../../util/helpers'
 
 // Types
-import { VNode } from 'vue/types'
-import mixins from '../../util/mixins'
+import { defineComponent, h, computed } from 'vue'
 
-/* @vue/component */
-export default mixins(Colorable, Themeable).extend({
+export default defineComponent({
   name: 'v-picker',
 
   props: {
@@ -25,62 +23,62 @@ export default mixins(Colorable, Themeable).extend({
     width: {
       type: [Number, String],
       default: 290
-    }
+    },
+    ...colorProps,
+    ...themeProps
   },
 
-  computed: {
-    computedTitleColor (): string | false {
-      const defaultTitleColor = this.isDark ? false : (this.color || 'primary')
-      return this.color || defaultTitleColor
-    }
-  },
+  setup (props, { slots }) {
+    const { setBackgroundColor } = useColorable(props)
+    const { themeClasses, isDark } = useThemeable(props)
 
-  methods: {
-    genTitle () {
-      return this.$createElement('div', this.setBackgroundColor(this.computedTitleColor, {
+    const computedTitleColor = computed(() => {
+      const defaultTitleColor = isDark.value ? false : (props.color || 'primary')
+      return props.color || defaultTitleColor
+    })
+
+    const classes = computed(() => ({
+      'v-picker--landscape': props.landscape,
+      'v-picker--full-width': props.fullWidth,
+      ...themeClasses.value
+    }))
+
+    function genTitle () {
+      return h('div', setBackgroundColor(computedTitleColor.value, {
         staticClass: 'v-picker__title',
-        'class': {
-          'v-picker__title--landscape': this.landscape
+        class: {
+          'v-picker__title--landscape': props.landscape
         }
-      }), this.$slots.title)
-    },
-    genBodyTransition () {
-      return this.$createElement('transition', {
-        props: {
-          name: this.transition
-        }
-      }, this.$slots.default)
-    },
-    genBody () {
-      return this.$createElement('div', {
-        staticClass: 'v-picker__body',
-        'class': this.themeClasses,
-        style: this.fullWidth ? undefined : {
-          width: convertToUnit(this.width)
-        }
-      }, [
-        this.genBodyTransition()
-      ])
-    },
-    genActions () {
-      return this.$createElement('div', {
-        staticClass: 'v-picker__actions v-card__actions'
-      }, this.$slots.actions)
+      }), slots.title?.())
     }
-  },
 
-  render (h): VNode {
-    return h('div', {
+    function genBodyTransition () {
+      return h('transition', { name: props.transition }, slots.default?.())
+    }
+
+    function genBody () {
+      return h('div', {
+        staticClass: 'v-picker__body',
+        class: themeClasses.value,
+        style: props.fullWidth ? undefined : {
+          width: convertToUnit(props.width)
+        }
+      }, [genBodyTransition()])
+    }
+
+    function genActions () {
+      return h('div', {
+        staticClass: 'v-picker__actions v-card__actions'
+      }, slots.actions?.())
+    }
+
+    return () => h('div', {
       staticClass: 'v-picker v-card',
-      'class': {
-        'v-picker--landscape': this.landscape,
-        'v-picker--full-width': this.fullWidth,
-        ...this.themeClasses
-      }
+      class: classes.value
     }, [
-      this.$slots.title ? this.genTitle() : null,
-      this.genBody(),
-      this.$slots.actions ? this.genActions() : null
+      slots.title ? genTitle() : null,
+      genBody(),
+      slots.actions ? genActions() : null
     ])
   }
 })
