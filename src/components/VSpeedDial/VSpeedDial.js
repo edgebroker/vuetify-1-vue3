@@ -1,95 +1,127 @@
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-import Toggleable from '../../mixins/toggleable'
-import Positionable from '../../mixins/positionable'
-import Transitionable from '../../mixins/transitionable'
+import useToggleable from '../../composables/useToggleable'
+import usePositionable, { positionProps } from '../../composables/usePositionable'
+import useTransitionable, { transitionableProps } from '../../composables/useTransitionable'
 
 import ClickOutside from '../../directives/click-outside'
 
-/* @vue/component */
-export default {
+import { defineComponent, h, computed, withDirectives, cloneVNode } from 'vue'
+
+export default defineComponent({
   name: 'v-speed-dial',
 
   directives: { ClickOutside },
-
-  mixins: [Positionable, Toggleable, Transitionable],
 
   props: {
     direction: {
       type: String,
       default: 'top',
-      validator: val => {
-        return ['top', 'right', 'bottom', 'left'].includes(val)
-      }
+      validator: val => ['top', 'right', 'bottom', 'left'].includes(val)
     },
     openOnHover: Boolean,
     transition: {
       type: String,
       default: 'scale-transition'
-    }
+    },
+    value: {
+      type: Boolean,
+      default: false
+    },
+    ...positionProps,
+    mode: transitionableProps.mode,
+    origin: transitionableProps.origin
   },
 
-  computed: {
-    classes () {
-      return {
-        'v-speed-dial': true,
-        'v-speed-dial--top': this.top,
-        'v-speed-dial--right': this.right,
-        'v-speed-dial--bottom': this.bottom,
-        'v-speed-dial--left': this.left,
-        'v-speed-dial--absolute': this.absolute,
-        'v-speed-dial--fixed': this.fixed,
-        [`v-speed-dial--direction-${this.direction}`]: true
-      }
-    }
-  },
+  setup (props, { slots, attrs, emit }) {
+    const { isActive } = useToggleable(props, emit)
+    const { positionClasses } = usePositionable(props)
+    const { transition, origin, mode } = useTransitionable(props)
 
-  render (h) {
-    let children = []
-    const data = {
-      'class': this.classes,
-      directives: [{
-        name: 'click-outside',
-        value: () => (this.isActive = false)
-      }],
-      on: {
-        click: () => (this.isActive = !this.isActive)
-      }
-    }
+    const classes = computed(() => ({
+      'v-speed-dial--top': positionClasses.value.top,
+      'v-speed-dial--right': positionClasses.value.right,
+      'v-speed-dial--bottom': positionClasses.value.bottom,
+      'v-speed-dial--left': positionClasses.value.left,
+      'v-speed-dial--absolute': positionClasses.value.absolute,
+      'v-speed-dial--fixed': positionClasses.value.fixed,
+      [`v-speed-dial--direction-${props.direction}`]: true
+    }))
 
-    if (this.openOnHover) {
-      data.on.mouseenter = () => (this.isActive = true)
-      data.on.mouseleave = () => (this.isActive = false)
-    }
+    function genChildren () {
+      if (!isActive.value) return []
 
-    if (this.isActive) {
+      const slotNodes = slots.default?.() || []
       let btnCount = 0
-      children = (this.$slots.default || []).map((b, i) => {
-        if (b.tag && typeof b.componentOptions !== 'undefined' && b.componentOptions.Ctor.options.name === 'v-btn') {
+
+      return slotNodes.map((node, index) => {
+        if (!node) return node
+
+        const type = node.type
+        if (type && typeof type === 'object' && type.name === 'v-btn') {
           btnCount++
           return h('div', {
             style: {
-              transitionDelay: btnCount * 0.05 + 's'
+              transitionDelay: `${btnCount * 0.05}s`
             },
-            key: i
-          }, [b])
-        } else {
-          b.key = i
-          return b
+            key: index
+          }, [node])
         }
+
+        return cloneVNode(node, { key: index })
       })
     }
 
-    const list = h('transition-group', {
-      'class': 'v-speed-dial__list',
-      props: {
-        name: this.transition,
-        mode: this.mode,
-        origin: this.origin,
-        tag: 'div'
-      }
-    }, children)
+    return () => {
+      const {
+        class: classAttr,
+        style,
+        onClick: listenerClick,
+        onMouseenter: listenerMouseenter,
+        onMouseleave: listenerMouseleave,
+        ...restAttrs
+      } = attrs
 
-    return h('div', data, [this.$slots.activator, list])
+      const data = {
+        class: ['v-speed-dial', classes.value, classAttr],
+        style,
+        ...restAttrs,
+        onClick: event => {
+          listenerClick && listenerClick(event)
+          isActive.value = !isActive.value
+        }
+      }
+
+      if (props.openOnHover) {
+        data.onMouseenter = event => {
+          listenerMouseenter && listenerMouseenter(event)
+          isActive.value = true
+        }
+        data.onMouseleave = event => {
+          listenerMouseleave && listenerMouseleave(event)
+          isActive.value = false
+        }
+      } else {
+        if (listenerMouseenter) data.onMouseenter = listenerMouseenter
+        if (listenerMouseleave) data.onMouseleave = listenerMouseleave
+      }
+
+      const list = h('transition-group', {
+        class: 'v-speed-dial__list',
+        name: transition.value,
+        mode: mode.value,
+        origin: origin.value,
+        tag: 'div'
+      }, genChildren())
+
+      const children = []
+      const activator = slots.activator?.()
+      if (activator) children.push(...activator)
+      children.push(list)
+
+      const speedDial = h('div', data, children)
+
+      return withDirectives(speedDial, [[ClickOutside, () => { isActive.value = false }]])
+    }
   }
-}
+})
