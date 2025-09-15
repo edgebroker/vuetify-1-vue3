@@ -2,7 +2,7 @@
 import { pad, createNativeLocaleFormatter } from './util'
 
 // Composables
-import useDatePickerTable, { datePickerTableProps } from '../../composables/useDatePickerTable'
+import useDatePickerTable, { datePickerTableProps } from './composables/useDatePickerTable'
 
 // Types
 import { computed, defineComponent, h } from 'vue'
