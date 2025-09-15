@@ -1,72 +1,69 @@
 import "@/css/vuetify.css"
 
-import Applicationable from '../../mixins/applicationable'
-import Colorable from '../../mixins/colorable'
-import Themeable from '../../mixins/themeable'
+// Composables
+import useApplicationable from '../../composables/useApplicationable'
+import useColorable, { colorProps } from '../../composables/useColorable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
 
 // Types
-import { VNode } from 'vue/types'
-import mixins from '../../util/mixins'
+import { defineComponent, h, computed, getCurrentInstance, watch } from 'vue'
 
-export default mixins(
-  Applicationable('bar', [
-    'height',
-    'window'
-  ]),
-  Colorable,
-  Themeable
-/* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-system-bar',
 
   props: {
     height: {
       type: [Number, String],
-      validator: (v: any) => !isNaN(parseInt(v))
+      validator: (v: any) => !isNaN(parseInt(v, 10)),
     },
     lightsOut: Boolean,
     status: Boolean,
-    window: Boolean
+    window: Boolean,
+    app: Boolean,
+    absolute: Boolean,
+    fixed: Boolean,
+    ...colorProps,
+    ...themeProps,
   },
 
-  computed: {
-    classes (): object {
-      return {
-        'v-system-bar--lights-out': this.lightsOut,
-        'v-system-bar--absolute': this.absolute,
-        'v-system-bar--fixed': !this.absolute && (this.app || this.fixed),
-        'v-system-bar--status': this.status,
-        'v-system-bar--window': this.window,
-        ...this.themeClasses
+  setup (props, { slots }) {
+    const { setBackgroundColor } = useColorable(props)
+    const { themeClasses } = useThemeable(props)
+
+    const computedHeight = computed(() => {
+      if (props.height) {
+        return parseInt(props.height as any, 10)
       }
-    },
-    computedHeight (): number {
-      if (this.height) return parseInt(this.height)
+      return props.window ? 32 : 24
+    })
 
-      return this.window ? 32 : 24
-    }
-  },
+    const application = useApplicationable(props, computed(() => 'bar'), ['height', 'window'])
+    const vm = getCurrentInstance()
 
-  methods: {
-    /**
-     * Update the application layout
-     *
-     * @return {number}
-     */
-    updateApplication () {
-      return this.computedHeight
-    }
-  },
+    watch([application.app, application.applicationProperty, computedHeight], ([app]) => {
+      if (!app || !vm?.proxy) return
+      vm.proxy.$vuetify?.application.bind(
+        vm.uid,
+        application.applicationProperty.value,
+        computedHeight.value,
+      )
+    }, { immediate: true })
 
-  render (h): VNode {
-    const data = {
+    const classes = computed(() => ({
+      'v-system-bar--lights-out': props.lightsOut,
+      'v-system-bar--absolute': props.absolute,
+      'v-system-bar--fixed': !props.absolute && (props.app || props.fixed),
+      'v-system-bar--status': props.status,
+      'v-system-bar--window': props.window,
+      ...themeClasses.value,
+    }))
+
+    return () => h('div', setBackgroundColor(props.color, {
       staticClass: 'v-system-bar',
-      'class': this.classes,
+      class: classes.value,
       style: {
-        height: `${this.computedHeight}px`
-      }
-    }
-
-    return h('div', this.setBackgroundColor(this.color, data), this.$slots.default)
-  }
+        height: `${computedHeight.value}px`,
+      },
+    }), slots.default?.())
+  },
 })

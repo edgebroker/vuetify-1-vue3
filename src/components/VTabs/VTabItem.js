@@ -1,29 +1,35 @@
 // Extensions
 import VWindowItem from '../VWindow/VWindowItem'
 
-// Mixins
+// Utilities
 import { deprecate } from '../../util/console'
 
-/* @vue/component */
-export default VWindowItem.extend({
+// Types
+import { defineComponent, h, getCurrentInstance } from 'vue'
+
+export default defineComponent({
   name: 'v-tab-item',
+  extends: VWindowItem,
 
   props: {
-    id: String
+    id: String,
   },
 
-  render (h) {
-    const render = VWindowItem.options.render.call(this, h)
+  setup (props) {
+    const vm = getCurrentInstance()
 
-    // For backwards compatibility with v1.2
-    /* istanbul ignore next */
-    if (this.id) {
-      deprecate('id', 'value', this)
+    return () => {
+      const proxy = vm?.proxy ?? {}
+      const render = VWindowItem.options.render.call(proxy, h)
 
-      render.data.domProps = render.data.domProps || {}
-      render.data.domProps.id = this.id
+      if (props.id) {
+        deprecate('id', 'value', proxy)
+        render.data = render.data || {}
+        render.data.domProps = render.data.domProps || {}
+        render.data.domProps.id = props.id
+      }
+
+      return render
     }
-
-    return render
-  }
+  },
 })
