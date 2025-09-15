@@ -1,6 +1,6 @@
 // Mixins
 import Toggleable from '../../mixins/toggleable'
-import useDelayable from '../../composables/useDelayable'
+import useDelayable from '../../../../../src/composables/useDelayable'
 
 // Utilities
 import mixins from '../../util/mixins'
