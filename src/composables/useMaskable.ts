@@ -3,7 +3,7 @@ import {
   isMaskDelimiter,
   maskText as maskTextOriginal,
   unmaskText as unmaskTextOriginal,
-} from '../../packages/vuetify/src/util/mask'
+} from '../utl/mask'
 
 export default function useMaskable (props, { emit }) {
   const selection = ref(0)

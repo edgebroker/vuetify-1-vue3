@@ -1,6 +1,6 @@
 import { ref, reactive, computed, watch, nextTick, getCurrentInstance } from 'vue'
-import { getObjectValueByPath, isObject } from '../../packages/vuetify/src/util/helpers'
-import { consoleWarn } from '../../packages/vuetify/src/util/console'
+import { getObjectValueByPath, isObject } from '../utl/helpers'
+import { consoleWarn } from '../utl/console'
 
 export const dataIterableProps = {
   expand: Boolean,

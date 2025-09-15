@@ -1,5 +1,5 @@
 import { computed } from 'vue'
-import { convertToUnit } from '../../packages/vuetify/src/util/helpers'
+import { convertToUnit } from '../utl/helpers'
 
 export const measurableProps = {
   height: [Number, String],

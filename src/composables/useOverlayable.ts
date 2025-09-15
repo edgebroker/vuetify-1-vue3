@@ -1,5 +1,5 @@
 import { ref, watch, onBeforeUnmount, getCurrentInstance } from 'vue'
-import { keyCodes, addPassiveEventListener } from '../../packages/vuetify/src/util/helpers'
+import { keyCodes, addPassiveEventListener } from '../utl/helpers'
 
 export const overlayableProps = {
   hideOverlay: Boolean
