@@ -6,7 +6,7 @@ import AppTheme from './mixins/app-theme'
 import Themeable from '../../mixins/themeable'
 
 // Directives
-import Resize from '../../directives/resize'
+import Resize from '../../../../../src/directives/resize'
 
 /* @vue/component */
 export default {

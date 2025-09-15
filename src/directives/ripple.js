@@ -1,26 +1,19 @@
-import { VNode, VNodeDirective } from 'vue'
 import { consoleWarn } from '../util/console'
 
-function transform (el: HTMLElement, value: string) {
+function transform (el, value) {
   el.style['transform'] = value
   el.style['webkitTransform'] = value
 }
 
-function opacity (el: HTMLElement, value: number) {
+function opacity (el, value) {
   el.style['opacity'] = value.toString()
 }
 
-export interface RippleOptions {
-  class?: string
-  center?: boolean
-  circle?: boolean
-}
-
-function isTouchEvent (e: MouseEvent | TouchEvent): e is TouchEvent {
+function isTouchEvent (e) {
   return e.constructor.name === 'TouchEvent'
 }
 
-const calculate = (e: MouseEvent | TouchEvent, el: HTMLElement, value: RippleOptions = {}) => {
+const calculate = (e, el, value = {}) => {
   const offset = el.getBoundingClientRect()
   const target = isTouchEvent(e) ? e.touches[e.touches.length - 1] : e
   const localX = target.clientX - offset.left
@@ -31,13 +24,15 @@ const calculate = (e: MouseEvent | TouchEvent, el: HTMLElement, value: RippleOpt
   if (el._ripple && el._ripple.circle) {
     scale = 0.15
     radius = el.clientWidth / 2
-    radius = value.center ? radius : radius + Math.sqrt((localX - radius) ** 2 + (localY - radius) ** 2) / 4
+    radius = value.center
+      ? radius
+      : radius + Math.sqrt((localX - radius) ** 2 + (localY - radius) ** 2) / 4
   } else {
     radius = Math.sqrt(el.clientWidth ** 2 + el.clientHeight ** 2) / 2
   }
 
-  const centerX = `${(el.clientWidth - (radius * 2)) / 2}px`
-  const centerY = `${(el.clientHeight - (radius * 2)) / 2}px`
+  const centerX = `${(el.clientWidth - radius * 2) / 2}px`
+  const centerY = `${(el.clientHeight - radius * 2) / 2}px`
 
   const x = value.center ? centerX : `${localX - radius}px`
   const y = value.center ? centerY : `${localY - radius}px`
@@ -46,11 +41,8 @@ const calculate = (e: MouseEvent | TouchEvent, el: HTMLElement, value: RippleOpt
 }
 
 const ripple = {
-  /* eslint-disable max-statements */
-  show (e: MouseEvent | TouchEvent, el: HTMLElement, value: RippleOptions = {}) {
-    if (!el._ripple || !el._ripple.enabled) {
-      return
-    }
+  show (e, el, value = {}) {
+    if (!el._ripple || !el._ripple.enabled) return
 
     const container = document.createElement('span')
     const animation = document.createElement('span')
@@ -58,9 +50,8 @@ const ripple = {
     container.appendChild(animation)
     container.className = 'v-ripple__container'
 
-    if (value.class) {
-      container.className += ` ${value.class}`
-    }
+    if (value.class) container.className += ` ${value.class}`
+    if (el._ripple && el._ripple.class) container.className += ` ${el._ripple.class}`
 
     const { radius, scale, x, y, centerX, centerY } = calculate(e, el, value)
 
@@ -91,7 +82,7 @@ const ripple = {
     }, 0)
   },
 
-  hide (el: HTMLElement | null) {
+  hide (el) {
     if (!el || !el._ripple || !el._ripple.enabled) return
 
     const ripples = el.getElementsByClassName('v-ripple__animation')
@@ -120,16 +111,16 @@ const ripple = {
         animation.parentNode && el.removeChild(animation.parentNode)
       }, 300)
     }, delay)
-  }
+  },
 }
 
-function isRippleEnabled (value: any): value is true {
+function isRippleEnabled (value) {
   return typeof value === 'undefined' || !!value
 }
 
-function rippleShow (e: MouseEvent | TouchEvent) {
-  const value: RippleOptions = {}
-  const element = e.currentTarget as HTMLElement
+function rippleShow (e) {
+  const value = {}
+  const element = e.currentTarget
   if (!element || !element._ripple || element._ripple.touched) return
   if (isTouchEvent(e)) {
     element._ripple.touched = true
@@ -141,8 +132,8 @@ function rippleShow (e: MouseEvent | TouchEvent) {
   ripple.show(e, element, value)
 }
 
-function rippleHide (e: Event) {
-  const element = e.currentTarget as HTMLElement | null
+function rippleHide (e) {
+  const element = e.currentTarget
   if (!element) return
 
   window.setTimeout(() => {
@@ -153,7 +144,7 @@ function rippleHide (e: Event) {
   ripple.hide(element)
 }
 
-function updateRipple (el: HTMLElement, binding: VNodeDirective, wasEnabled: boolean) {
+function updateRipple (el, binding, wasEnabled) {
   const enabled = isRippleEnabled(binding.value)
   if (!enabled) {
     ripple.hide(el)
@@ -178,14 +169,13 @@ function updateRipple (el: HTMLElement, binding: VNodeDirective, wasEnabled: boo
     el.addEventListener('mousedown', rippleShow)
     el.addEventListener('mouseup', rippleHide)
     el.addEventListener('mouseleave', rippleHide)
-    // Anchor tags can be dragged, causes other hides to fail - #1537
     el.addEventListener('dragstart', rippleHide, { passive: true })
   } else if (!enabled && wasEnabled) {
     removeListeners(el)
   }
 }
 
-function removeListeners (el: HTMLElement) {
+function removeListeners (el) {
   el.removeEventListener('mousedown', rippleShow)
   el.removeEventListener('touchstart', rippleHide)
   el.removeEventListener('touchend', rippleHide)
@@ -195,25 +185,24 @@ function removeListeners (el: HTMLElement) {
   el.removeEventListener('dragstart', rippleHide)
 }
 
-function directive (el: HTMLElement, binding: VNodeDirective, node: VNode) {
+function directive (el, binding, node) {
   updateRipple(el, binding, false)
 
-  // warn if an inline element is used, waiting for el to be in the DOM first
   node.context && node.context.$nextTick(() => {
     const computed = window.getComputedStyle(el)
     if (computed && computed.display === 'inline') {
-      const context = (node as any).fnOptions ? [(node as any).fnOptions, node.context] : [node.componentInstance]
+      const context = node.fnOptions ? [node.fnOptions, node.context] : [node.componentInstance]
       consoleWarn('v-ripple can only be used on block-level elements', ...context)
     }
   })
 }
 
-function unbind (el: HTMLElement) {
+function unbind (el) {
   delete el._ripple
   removeListeners(el)
 }
 
-function update (el: HTMLElement, binding: VNodeDirective) {
+function update (el, binding) {
   if (binding.value === binding.oldValue) {
     return
   }
@@ -225,5 +214,5 @@ function update (el: HTMLElement, binding: VNodeDirective) {
 export default {
   bind: directive,
   unbind,
-  update
+  update,
 }

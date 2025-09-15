@@ -1,7 +1,7 @@
 import "@/css/vuetify.css"
 import VuetifyComponent from './components/Vuetify'
 import * as components from './components'
-import directives from './directives'
+import directives from '../../../src/directives'
 import { VueConstructor } from 'vue'
 import { Vuetify as VuetifyPlugin, VuetifyUseOptions } from 'vuetify/types'
 

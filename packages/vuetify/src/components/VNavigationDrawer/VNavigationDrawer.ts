@@ -9,9 +9,9 @@ import SSRBootable from '../../mixins/ssr-bootable'
 import Themeable from '../../mixins/themeable'
 
 // Directives
-import ClickOutside from '../../directives/click-outside'
-import Resize from '../../directives/resize'
-import Touch, { TouchWrapper } from '../../directives/touch'
+import ClickOutside from '../../../../../src/directives/click-outside'
+import Resize from '../../../../../src/directives/resize'
+import Touch, { TouchWrapper } from '../../../../../src/directives/touch'
 
 // Utilities
 import { convertToUnit } from '../../util/helpers'

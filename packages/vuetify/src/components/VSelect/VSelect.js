@@ -14,7 +14,7 @@ import Comparable from '../../mixins/comparable'
 import Filterable from '../../mixins/filterable'
 
 // Directives
-import ClickOutside from '../../directives/click-outside'
+import ClickOutside from '../../../../../src/directives/click-outside'
 
 // Helpers
 import { camelize, getPropertyFromItem, keyCodes } from '../../util/helpers'

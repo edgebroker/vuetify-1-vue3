@@ -8,7 +8,7 @@ import Themeable from '../../mixins/themeable'
 import SSRBootable from '../../mixins/ssr-bootable'
 
 // Directives
-import Scroll from '../../directives/scroll'
+import Scroll from '../../../../../src/directives/scroll'
 import { deprecate } from '../../util/console'
 
 // Types

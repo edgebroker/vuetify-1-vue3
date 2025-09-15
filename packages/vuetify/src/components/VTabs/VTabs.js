@@ -17,8 +17,8 @@ import SSRBootable from '../../mixins/ssr-bootable'
 import Themeable from '../../mixins/themeable'
 
 // Directives
-import Resize from '../../directives/resize'
-import Touch from '../../directives/touch'
+import Resize from '../../../../../src/directives/resize'
+import Touch from '../../../../../src/directives/touch'
 import { deprecate } from '../../util/console'
 
 // Utils

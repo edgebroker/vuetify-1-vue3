@@ -18,8 +18,8 @@ import Keyable from './mixins/menu-keyable'
 import Position from './mixins/menu-position'
 
 // Directives
-import ClickOutside from '../../directives/click-outside'
-import Resize from '../../directives/resize'
+import ClickOutside from '../../../../../src/directives/click-outside'
+import Resize from '../../../../../src/directives/resize'
 
 // Helpers
 import { convertToUnit, getSlotType } from '../../util/helpers'

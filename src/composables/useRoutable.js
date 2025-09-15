@@ -1,5 +1,5 @@
 import { computed, getCurrentInstance } from 'vue'
-import Ripple from '../../packages/vuetify/src/directives/ripple'
+import Ripple from '../directives/ripple'
 
 const routableProps = {
   activeClass: String,

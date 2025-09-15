@@ -5,7 +5,7 @@ import "@/css/vuetify.css"
 import { VNode } from 'vue'
 import { PropValidator } from 'vue/types/options'
 import mixins, { ExtractVue } from '../../util/mixins'
-import { RippleOptions } from '../../directives/ripple'
+import { RippleOptions } from '../../../../../src/directives/ripple'
 
 // Components
 import VProgressCircular from '../VProgressCircular'

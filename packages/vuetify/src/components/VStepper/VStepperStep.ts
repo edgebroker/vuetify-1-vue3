@@ -6,7 +6,7 @@ import Colorable from '../../mixins/colorable'
 import { inject as RegistrableInject, Registrable } from '../../mixins/registrable'
 
 // Directives
-import Ripple from '../../directives/ripple'
+import Ripple from '../../../../../src/directives/ripple'
 
 // Util
 import mixins, { ExtractVue } from '../../util/mixins'

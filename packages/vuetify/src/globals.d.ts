@@ -12,7 +12,7 @@ import {
   ThisTypedComponentOptionsWithArrayProps,
   ThisTypedComponentOptionsWithRecordProps
 } from 'vue/types/options'
-import { TouchStoredHandlers } from './directives/touch'
+import { TouchStoredHandlers } from '../../../src/directives/touch'
 
 declare global {
   interface Window {

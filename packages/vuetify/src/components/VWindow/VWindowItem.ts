@@ -6,7 +6,7 @@ import Bootable from '../../mixins/bootable'
 import { factory as GroupableFactory } from '../../mixins/groupable'
 
 // Directives
-import Touch from '../../directives/touch'
+import Touch from '../../../../../src/directives/touch'
 
 // Utilities
 import { convertToUnit } from '../../util/helpers'

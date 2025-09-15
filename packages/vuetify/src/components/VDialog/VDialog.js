@@ -9,7 +9,7 @@ import Stackable from '../../mixins/stackable'
 import Toggleable from '../../mixins/toggleable'
 
 // Directives
-import ClickOutside from '../../directives/click-outside'
+import ClickOutside from '../../../../../src/directives/click-outside'
 
 // Helpers
 import { convertToUnit, keyCodes, getSlotType } from '../../util/helpers'

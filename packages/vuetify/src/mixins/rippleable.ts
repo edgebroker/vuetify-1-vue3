@@ -1,5 +1,5 @@
 // Directives
-import Ripple from '../directives/ripple'
+import Ripple from '../../../../src/directives/ripple'
 
 // Types
 import Vue, { VNode, VNodeData, VNodeDirective } from 'vue'

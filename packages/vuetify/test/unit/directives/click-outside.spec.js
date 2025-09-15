@@ -1,6 +1,6 @@
 import Vue from 'vue'
 import { test } from '@/test'
-import ClickOutside from '@/directives/click-outside'
+import ClickOutside from '../../../../../src/directives/click-outside'
 
 function bootstrap (args) {
   let registeredHandler

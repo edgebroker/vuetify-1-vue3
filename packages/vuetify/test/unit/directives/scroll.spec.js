@@ -1,4 +1,4 @@
-import Scroll from '@/directives/scroll'
+import Scroll from '../../../../../src/directives/scroll'
 import { test } from '@/test'
 
 test('scroll.js', () => {

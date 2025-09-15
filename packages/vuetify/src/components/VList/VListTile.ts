@@ -5,7 +5,7 @@ import Toggleable from '../../mixins/toggleable'
 import Themeable from '../../mixins/themeable'
 
 // Directives
-import Ripple from '../../directives/ripple'
+import Ripple from '../../../../../src/directives/ripple'
 
 // Types
 import mixins from '../../util/mixins'
