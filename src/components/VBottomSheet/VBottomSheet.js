@@ -1,9 +1,15 @@
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
+// Components
 import VDialog from '../VDialog/VDialog'
 
-/* @vue/component */
-export default {
+// Composables
+import useToggleable from '../../composables/useToggleable'
+
+// Types
+import { defineComponent, h } from 'vue'
+
+export default defineComponent({
   name: 'v-bottom-sheet',
 
   props: {
@@ -20,29 +26,26 @@ export default {
     value: null
   },
 
-  render (h) {
-    const activator = h('template', {
-      slot: 'activator'
-    }, this.$slots.activator)
+  setup (props, { slots, attrs, emit }) {
+    const { isActive } = useToggleable(props, emit)
 
-    const contentClass = [
-      'v-bottom-sheet',
-      this.inset ? 'v-bottom-sheet--inset' : ''
-    ].join(' ')
+    return () => {
+      const contentClass = [
+        'v-bottom-sheet',
+        props.inset ? 'v-bottom-sheet--inset' : ''
+      ].join(' ')
 
-    return h(VDialog, {
-      attrs: {
-        ...this.$props
-      },
-      on: {
-        ...this.$listeners
-      },
-      props: {
+      return h(VDialog, {
+        ...attrs,
+        ...props,
         contentClass,
         noClickAnimation: true,
         transition: 'bottom-sheet-transition',
-        value: this.value
-      }
-    }, [activator, this.$slots.default])
+        value: isActive.value
+      }, {
+        activator: slots.activator,
+        default: slots.default
+      })
+    }
   }
-}
+})
