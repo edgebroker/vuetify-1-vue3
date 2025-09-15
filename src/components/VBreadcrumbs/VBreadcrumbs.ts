@@ -1,113 +1,99 @@
 // Styles
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
 // Types
-import { VNode } from 'vue'
-import { PropValidator } from 'vue/types/options'
+import { defineComponent, h, computed, onMounted, PropType } from 'vue'
 
 // Components
 import { VBreadcrumbsDivider, VBreadcrumbsItem } from '.'
 
-// Mixins
-import Themeable from '../../mixins/themeable'
+// Composables
+import useThemeable, { themeProps } from '../../composables/useThemeable'
 
 // Utils
 import { deprecate } from '../../util/console'
-import mixins from '../../util/mixins'
 
-export default mixins(
-  Themeable
-  /* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-breadcrumbs',
 
   props: {
+    ...themeProps,
     divider: {
       type: String,
       default: '/'
     },
     items: {
-      type: Array,
+      type: Array as PropType<any[]>,
       default: () => ([])
-    } as PropValidator<any[]>,
+    },
     large: Boolean,
     justifyCenter: Boolean,
     justifyEnd: Boolean
   },
 
-  computed: {
-    classes (): object {
-      return {
-        'v-breadcrumbs--large': this.large,
-        'justify-center': this.justifyCenter,
-        'justify-end': this.justifyEnd,
-        ...this.themeClasses
-      }
+  setup (props, { slots }) {
+    const { themeClasses } = useThemeable(props)
+
+    const classes = computed(() => ({
+      'v-breadcrumbs--large': props.large,
+      'justify-center': props.justifyCenter,
+      'justify-end': props.justifyEnd,
+      ...themeClasses.value
+    }))
+
+    onMounted(() => {
+      if (props.justifyCenter) deprecate('justify-center', 'class="justify-center"')
+      if (props.justifyEnd) deprecate('justify-end', 'class="justify-end"')
+      if (slots.default) deprecate('default slot', ':items and scoped slot "item"')
+    })
+
+    function genDivider () {
+      return h(VBreadcrumbsDivider, {}, slots.divider?.() ?? props.divider)
     }
-  },
 
-  mounted () {
-    if (this.justifyCenter) deprecate('justify-center', 'class="justify-center"', this)
-    if (this.justifyEnd) deprecate('justify-end', 'class="justify-end"', this)
-    if (this.$slots.default) deprecate('default slot', ':items and scoped slot "item"', this)
-  },
-
-  methods: {
-    /* @deprecated */
-    genChildren /* istanbul ignore next */ () {
-      if (!this.$slots.default) return undefined
-
+    function genChildren () {
       const children = []
-
+      const slotNodes = slots.default?.() || []
       let createDividers = false
-      for (let i = 0; i < this.$slots.default.length; i++) {
-        const elm = this.$slots.default[i]
 
-        if (
-          !elm.componentOptions ||
-          elm.componentOptions.Ctor.options.name !== 'v-breadcrumbs-item'
-        ) {
+      for (const elm of slotNodes) {
+        const type: any = elm.type
+        if (!type || type.name !== 'v-breadcrumbs-item') {
           children.push(elm)
         } else {
-          if (createDividers) {
-            children.push(this.genDivider())
-          }
+          if (createDividers) children.push(genDivider())
           children.push(elm)
           createDividers = true
         }
       }
 
       return children
-    },
-    genDivider () {
-      return this.$createElement(VBreadcrumbsDivider, this.$slots.divider ? this.$slots.divider : this.divider)
-    },
-    genItems () {
-      const items = []
-      const hasSlot = !!this.$scopedSlots.item
-      const keys = []
+    }
 
-      for (let i = 0; i < this.items.length; i++) {
-        const item = this.items[i]
+    function genItems () {
+      const items: any[] = []
+      const hasSlot = !!slots.item
+      const keys: string[] = []
 
+      for (let i = 0; i < props.items.length; i++) {
+        const item: any = props.items[i]
         keys.push(item.text)
 
-        if (hasSlot) items.push(this.$scopedSlots.item!({ item }))
-        else items.push(this.$createElement(VBreadcrumbsItem, { key: keys.join('.'), props: item }, [item.text]))
+        if (hasSlot) items.push(slots.item!({ item }))
+        else items.push(h(VBreadcrumbsItem, { key: keys.join('.'), ...item }, { default: () => item.text }))
 
-        if (i < this.items.length - 1) items.push(this.genDivider())
+        if (i < props.items.length - 1) items.push(genDivider())
       }
 
       return items
     }
-  },
 
-  render (h): VNode {
-    const children = this.$slots.default ? this.genChildren() : this.genItems()
+    return () => {
+      const children = slots.default ? genChildren() : genItems()
 
-    return h('ul', {
-      staticClass: 'v-breadcrumbs',
-      'class': this.classes
-    }, children)
+      return h('ul', {
+        class: ['v-breadcrumbs', classes.value]
+      }, children)
+    }
   }
 })
