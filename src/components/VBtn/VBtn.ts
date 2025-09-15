@@ -1,40 +1,24 @@
 // Styles
-import "@/css/vuetify.css"
-
-// Types
-import { VNode } from 'vue'
-import { PropValidator } from 'vue/types/options'
-import mixins, { ExtractVue } from '../../util/mixins'
-import { RippleOptions } from '../../directives/ripple'
+import '@/css/vuetify.css'
 
 // Components
 import VProgressCircular from '../VProgressCircular'
 
-// Mixins
-import Colorable from '../../mixins/colorable'
-import { factory as GroupableFactory } from '../../mixins/groupable'
-import Positionable from '../../mixins/positionable'
-import Routable from '../../mixins/routable'
-import Themeable from '../../mixins/themeable'
-import { factory as ToggleableFactory } from '../../mixins/toggleable'
+// Composables
+import useColorable, { colorProps } from '../../composables/useColorable'
+import useRoutable, { routableProps } from '../../composables/useRoutable'
+import usePositionable, { positionProps } from '../../composables/usePositionable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
+import { factory as groupableFactory } from '../../composables/useGroupable'
+import { factory as toggleableFactory } from '../../composables/useToggleable'
 
-// Utilities
-import { getObjectValueByPath } from '../../util/helpers'
+// Types
+import { defineComponent, h, computed } from 'vue'
 
-const baseMixins = mixins(
-  Colorable,
-  Routable,
-  Positionable,
-  Themeable,
-  GroupableFactory('btnToggle'),
-  ToggleableFactory('inputValue')
-  /* @vue/component */
-)
-interface options extends ExtractVue<typeof baseMixins> {
-  $el: HTMLElement
-}
+const useBtnGroup = groupableFactory('btnToggle')
+const useToggle = toggleableFactory('inputValue')
 
-export default baseMixins.extend<options>().extend({
+export default defineComponent({
   name: 'v-btn',
 
   props: {
@@ -64,106 +48,67 @@ export default baseMixins.extend<options>().extend({
       type: String,
       default: 'button'
     },
-    value: null as any as PropValidator<any>
+    value: null,
+    ...routableProps,
+    ...positionProps,
+    ...colorProps,
+    ...themeProps
   },
 
-  computed: {
-    classes (): any {
-      return {
-        'v-btn': true,
-        [this.activeClass]: this.isActive,
-        'v-btn--absolute': this.absolute,
-        'v-btn--block': this.block,
-        'v-btn--bottom': this.bottom,
-        'v-btn--disabled': this.disabled,
-        'v-btn--flat': this.flat,
-        'v-btn--floating': this.fab,
-        'v-btn--fixed': this.fixed,
-        'v-btn--icon': this.icon,
-        'v-btn--large': this.large,
-        'v-btn--left': this.left,
-        'v-btn--loader': this.loading,
-        'v-btn--outline': this.outline,
-        'v-btn--depressed': (this.depressed && !this.flat) || this.outline,
-        'v-btn--right': this.right,
-        'v-btn--round': this.round,
-        'v-btn--router': this.to,
-        'v-btn--small': this.small,
-        'v-btn--top': this.top,
-        ...this.themeClasses
-      }
-    },
-    computedRipple (): RippleOptions | boolean {
-      const defaultRipple = this.icon || this.fab ? { circle: true } : true
-      if (this.disabled) return false
-      else return this.ripple !== null ? this.ripple : defaultRipple
-    }
-  },
+  setup (props, { slots, attrs, emit }) {
+    const { setBackgroundColor, setTextColor } = useColorable(props)
+    const { generateRouteLink } = useRoutable(props, { attrs, emit })
+    const { positionClasses } = usePositionable(props)
+    const { themeClasses } = useThemeable(props)
+    const { groupClasses, toggle } = useBtnGroup(props, emit)
+    const { isActive } = useToggle(props, emit)
 
-  watch: {
-    '$route': 'onRouteChange'
-  },
+    const classes = computed(() => ({
+      'v-btn': true,
+      'v-btn--block': props.block,
+      'v-btn--flat': props.flat,
+      'v-btn--floating': props.fab,
+      'v-btn--icon': props.icon,
+      'v-btn--large': props.large,
+      'v-btn--loading': props.loading,
+      'v-btn--outline': props.outline,
+      'v-btn--depressed': (props.depressed && !props.flat) || props.outline,
+      'v-btn--round': props.round,
+      'v-btn--small': props.small,
+      ...positionClasses.value,
+      ...themeClasses.value,
+      ...groupClasses.value
+    }))
 
-  methods: {
-    // Prevent focus to match md spec
-    click (e: MouseEvent): void {
-      !this.fab &&
-      e.detail &&
-      this.$el.blur()
-
-      this.$emit('click', e)
-
-      this.btnToggle && this.toggle()
-    },
-    genContent (): VNode {
-      return this.$createElement(
-        'div',
-        { 'class': 'v-btn__content' },
-        this.$slots.default
-      )
-    },
-    genLoader (): VNode {
-      return this.$createElement('span', {
-        class: 'v-btn__loading'
-      }, this.$slots.loader || [this.$createElement(VProgressCircular, {
-        props: {
-          indeterminate: true,
-          size: 23,
-          width: 2
-        }
-      })])
-    },
-    onRouteChange () {
-      if (!this.to || !this.$refs.link) return
-
-      const path = `_vnode.data.class.${this.activeClass}`
-
-      this.$nextTick(() => {
-        if (getObjectValueByPath(this.$refs.link, path)) {
-          this.toggle()
-        }
-      })
-    }
-  },
-
-  render (h): VNode {
-    const setColor = (!this.outline && !this.flat && !this.disabled) ? this.setBackgroundColor : this.setTextColor
-    const { tag, data } = this.generateRouteLink(this.classes)
-    const children = [
-      this.genContent(),
-      this.loading && this.genLoader()
-    ]
-
-    if (tag === 'button') data.attrs!.type = this.type
-
-    data.attrs!.value = ['string', 'number'].includes(typeof this.value)
-      ? this.value
-      : JSON.stringify(this.value)
-
-    if (this.btnToggle) {
-      data.ref = 'link'
+    function genContent () {
+      return h('div', { class: 'v-btn__content' }, slots.default?.())
     }
 
-    return h(tag, setColor(this.color, data), children)
+    function genLoader () {
+      if (!props.loading) return null
+      return h('span', { class: 'v-btn__loading' }, slots.loader?.() || [
+        h(VProgressCircular, { indeterminate: true, size: 23, width: 2 })
+      ])
+    }
+
+    function click (e: MouseEvent) {
+      emit('click', e)
+      toggle()
+    }
+
+    return () => {
+      const setColor = (!props.outline && !props.flat && !attrs.disabled)
+        ? setBackgroundColor
+        : setTextColor
+      const { tag, data } = generateRouteLink(classes.value)
+      const children = [genContent(), genLoader()]
+
+      if (tag === 'button') data.attrs!.type = props.type
+      data.attrs!.value = ['string', 'number'].includes(typeof props.value)
+        ? props.value
+        : JSON.stringify(props.value)
+
+      return h(tag, { ...setColor(props.color, data), on: { ...data.on, click } }, children)
+    }
   }
 })
