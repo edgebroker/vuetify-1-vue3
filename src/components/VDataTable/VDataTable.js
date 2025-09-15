@@ -1,25 +1,19 @@
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-import DataIterable from '../../mixins/data-iterable'
+// Composables
+import useDataIterable, { dataIterableProps } from '../../composables/useDataIterable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
 
-import Head from './mixins/head'
-import Body from './mixins/body'
-import Foot from './mixins/foot'
-import Progress from './mixins/progress'
+// Utils
+import { createSimpleFunctional, getObjectValueByPath } from '../../util/helpers'
 
-import {
-  createSimpleFunctional,
-  getObjectValueByPath
-} from '../../util/helpers'
+// Types
+import { defineComponent, h } from 'vue'
 
-// Importing does not work properly
 const VTableOverflow = createSimpleFunctional('v-table__overflow')
 
-/* @vue/component */
-export default {
+export default defineComponent({
   name: 'v-data-table',
-
-  mixins: [DataIterable, Head, Body, Foot, Progress],
 
   props: {
     headers: {
@@ -47,74 +41,42 @@ export default {
       default: (items, search, filter, headers) => {
         search = search.toString().toLowerCase()
         if (search.trim() === '') return items
-
         const props = headers.map(h => h.value)
-
         return items.filter(item => props.some(prop => filter(getObjectValueByPath(item, prop, item[prop]), search)))
       }
-    }
+    },
+    ...dataIterableProps,
+    ...themeProps
   },
 
-  data () {
-    return {
-      actionsClasses: 'v-datatable__actions',
-      actionsRangeControlsClasses: 'v-datatable__actions__range-controls',
-      actionsSelectClasses: 'v-datatable__actions__select',
-      actionsPaginationClasses: 'v-datatable__actions__pagination'
-    }
-  },
+  setup (props, { slots, attrs, emit }) {
+    const iterable = useDataIterable(props, emit)
+    const { themeClasses } = useThemeable(props)
 
-  computed: {
-    classes () {
+    iterable.initPagination()
+
+    function classes () {
       return {
         'v-datatable v-table': true,
-        'v-datatable--select-all': this.selectAll !== false,
-        ...this.themeClasses
+        'v-datatable--select-all': props.selectAll !== false,
+        ...themeClasses.value
       }
-    },
-    filteredItems () {
-      return this.filteredItemsImpl(this.headers)
-    },
-    headerColumns () {
-      return this.headersLength || this.headers.length + (this.selectAll !== false)
     }
-  },
 
-  created () {
-    const firstSortable = this.headers.find(h => (
-      !('sortable' in h) || h.sortable)
-    )
+    const filteredItems = () => iterable.filteredItemsImpl(props.headers)
 
-    this.defaultPagination.sortBy = !this.disableInitialSort && firstSortable
-      ? firstSortable.value
-      : null
+    return () => {
+      const headerRow = !props.hideHeaders ? h('thead', [h('tr', props.headers.map((hObj, i) => h('th', { key: props.headerKey ? hObj[props.headerKey] : i }, hObj[props.headerText])) )]) : null
+      const bodyRows = h('tbody', filteredItems().map((item, index) => {
+        return slots.item ? slots.item(iterable.createProps(item, index)) : null
+      }))
 
-    this.initPagination()
-  },
-
-  methods: {
-    hasTag (elements, tag) {
-      return Array.isArray(elements) && elements.find(e => e.tag === tag)
-    },
-    genTR (children, data = {}) {
-      return this.$createElement('tr', data, children)
-    }
-  },
-
-  render (h) {
-    const tableOverflow = h(VTableOverflow, {}, [
-      h('table', {
-        'class': this.classes
-      }, [
-        this.genTHead(),
-        this.genTBody(),
-        this.genTFoot()
+      const table = h(VTableOverflow, {}, [
+        h('table', { class: classes() }, [headerRow, bodyRows])
       ])
-    ])
 
-    return h('div', [
-      tableOverflow,
-      this.genActionsFooter()
-    ])
+      return h('div', [table, iterable.genActions ? iterable.genActions() : null])
+    }
   }
-}
+})
+

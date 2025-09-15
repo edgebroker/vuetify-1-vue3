@@ -1,19 +1,17 @@
-import "@/css/vuetify.css"
-
-// Types
-import { CreateElement, VNode } from 'vue'
-import mixins from '../../util/mixins'
+import '@/css/vuetify.css'
 
 // Components
 import VIcon from '../VIcon'
 
-// Mixins
-import Colorable from '../../mixins/colorable'
-import Themeable from '../../mixins/themeable'
-import Toggleable from '../../mixins/toggleable'
+// Composables
+import useColorable, { colorProps } from '../../composables/useColorable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
+import useToggleable from '../../composables/useToggleable'
 
-/* @vue/component */
-export default mixins(Colorable, Themeable, Toggleable).extend({
+// Types
+import { defineComponent, h, computed } from 'vue'
+
+export default defineComponent({
   name: 'v-chip',
 
   props: {
@@ -28,63 +26,56 @@ export default mixins(Colorable, Themeable, Toggleable).extend({
     value: {
       type: Boolean,
       default: true
-    }
+    },
+    ...colorProps,
+    ...themeProps
   },
 
-  computed: {
-    classes (): object {
-      return {
-        'v-chip--disabled': this.disabled,
-        'v-chip--selected': this.selected && !this.disabled,
-        'v-chip--label': this.label,
-        'v-chip--outline': this.outline,
-        'v-chip--small': this.small,
-        'v-chip--removable': this.close,
-        ...this.themeClasses
-      }
-    }
-  },
+  setup (props, { slots, attrs, emit }) {
+    const { setBackgroundColor, setTextColor } = useColorable(props)
+    const { themeClasses } = useThemeable(props)
+    const { isActive } = useToggleable(props, emit)
 
-  methods: {
-    genClose (h: CreateElement): VNode {
-      const data = {
-        staticClass: 'v-chip__close',
-        on: {
-          click: (e: Event) => {
-            e.stopPropagation()
+    const classes = computed(() => ({
+      'v-chip--disabled': props.disabled,
+      'v-chip--selected': props.selected && !props.disabled,
+      'v-chip--label': props.label,
+      'v-chip--outline': props.outline,
+      'v-chip--small': props.small,
+      'v-chip--removable': props.close,
+      ...themeClasses.value
+    }))
 
-            this.$emit('input', false)
-          }
+    function genClose () {
+      const on = {
+        click: (e: Event) => {
+          e.stopPropagation()
+          emit('input', false)
         }
       }
-
-      return h('div', data, [
+      return h('div', { class: 'v-chip__close', on }, [
         h(VIcon, '$vuetify.icons.delete')
       ])
-    },
-    genContent (h: CreateElement): VNode {
-      return h('span', {
-        staticClass: 'v-chip__content'
-      }, [
-        this.$slots.default,
-        this.close && this.genClose(h)
+    }
+
+    function genContent () {
+      return h('span', { class: 'v-chip__content' }, [
+        slots.default?.(),
+        props.close && genClose()
       ])
     }
-  },
 
-  render (h): VNode {
-    const data = this.setBackgroundColor(this.color, {
-      staticClass: 'v-chip',
-      'class': this.classes,
-      attrs: { tabindex: this.disabled ? -1 : 0 },
-      directives: [{
-        name: 'show',
-        value: this.isActive
-      }],
-      on: this.$listeners
-    })
+    return () => {
+      const data = setBackgroundColor(props.color, {
+        class: ['v-chip', classes.value],
+        tabindex: props.disabled ? -1 : 0,
+        directives: [{ name: 'show', value: isActive.value }],
+        ...attrs
+      })
 
-    const color = this.textColor || (this.outline && this.color)
-    return h('span', this.setTextColor(color, data), [this.genContent(h)])
+      const color = props.textColor || (props.outline && props.color)
+      return h('span', setTextColor(color, data), [genContent()])
+    }
   }
 })
+

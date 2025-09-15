@@ -1,5 +1,5 @@
 // Styles
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
 // Extensions
 import VSelect from '../VSelect/VSelect'
@@ -8,8 +8,10 @@ import VAutocomplete from '../VAutocomplete/VAutocomplete'
 // Utils
 import { keyCodes } from '../../util/helpers'
 
-/* @vue/component */
-export default {
+// Types
+import { defineComponent, ref, computed, getCurrentInstance } from 'vue'
+
+export default defineComponent({
   name: 'v-combobox',
 
   extends: VAutocomplete,
@@ -25,194 +27,175 @@ export default {
     }
   },
 
-  data: () => ({
-    editingIndex: -1
-  }),
+  setup (props) {
+    const vm = getCurrentInstance().proxy
+    const editingIndex = ref(-1)
 
-  computed: {
-    counterValue () {
-      return this.multiple
-        ? this.selectedItems.length
-        : (this.internalSearch || '').toString().length
-    },
-    hasSlot () {
-      return VSelect.options.computed.hasSlot.call(this) || this.multiple
-    },
-    isAnyValueAllowed () {
-      return true
-    },
-    menuCanShow () {
-      if (!this.isFocused) return false
+    const counterValue = computed(() => {
+      return vm.multiple
+        ? vm.selectedItems.length
+        : (vm.internalSearch || '').toString().length
+    })
 
-      return this.hasDisplayedItems ||
-        (!!this.$slots['no-data'] && !this.hideNoData)
+    const hasSlot = computed(() => {
+      return VSelect.options.computed.hasSlot.call(vm) || vm.multiple
+    })
+
+    const isAnyValueAllowed = computed(() => true)
+
+    const menuCanShow = computed(() => {
+      if (!vm.isFocused) return false
+      return vm.hasDisplayedItems || (!!vm.$slots['no-data'] && !vm.hideNoData)
+    })
+
+    function onFilteredItemsChanged () {
+      // no-op
     }
-  },
 
-  methods: {
-    onFilteredItemsChanged () {
-      // nop
-    },
-    onInternalSearchChanged (val) {
+    function onInternalSearchChanged (val) {
       if (
         val &&
-        this.multiple &&
-        this.delimiters.length
+        vm.multiple &&
+        props.delimiters.length
       ) {
-        const delimiter = this.delimiters.find(d => val.endsWith(d))
+        const delimiter = props.delimiters.find(d => val.endsWith(d))
         if (delimiter != null) {
-          this.internalSearch = val.slice(0, val.length - delimiter.length)
-          this.updateTags()
+          vm.internalSearch = val.slice(0, val.length - delimiter.length)
+          updateTags()
         }
       }
 
-      this.updateMenuDimensions()
-    },
-    genChipSelection (item, index) {
-      const chip = VSelect.options.methods.genChipSelection.call(this, item, index)
+      vm.updateMenuDimensions()
+    }
 
-      // Allow user to update an existing value
-      if (this.multiple) {
+    function genChipSelection (item, index) {
+      const chip = VSelect.options.methods.genChipSelection.call(vm, item, index)
+
+      if (vm.multiple) {
         chip.componentOptions.listeners.dblclick = () => {
-          this.editingIndex = index
-          this.internalSearch = this.getText(item)
-          this.selectedIndex = -1
+          editingIndex.value = index
+          vm.internalSearch = vm.getText(item)
+          vm.selectedIndex = -1
         }
       }
 
       return chip
-    },
-    onChipInput (item) {
-      VSelect.options.methods.onChipInput.call(this, item)
+    }
 
-      this.editingIndex = -1
-    },
-    // Requires a manual definition
-    // to overwrite removal in v-autocomplete
-    onEnterDown (e) {
+    function onChipInput (item) {
+      VSelect.options.methods.onChipInput.call(vm, item)
+      editingIndex.value = -1
+    }
+
+    function onEnterDown (e) {
       e.preventDefault()
+      VSelect.options.methods.onEnterDown.call(vm)
+      if (vm.getMenuIndex() > -1) return
+      updateSelf()
+    }
 
-      VSelect.options.methods.onEnterDown.call(this)
-
-      // If has menu index, let v-select-list handle
-      if (this.getMenuIndex() > -1) return
-
-      this.updateSelf()
-    },
-    onKeyDown (e) {
+    function onKeyDown (e) {
       const keyCode = e.keyCode
-
-      VSelect.options.methods.onKeyDown.call(this, e)
-
-      // If user is at selection index of 0
-      // create a new tag
-      if (this.multiple &&
+      VSelect.options.methods.onKeyDown.call(vm, e)
+      if (vm.multiple &&
         keyCode === keyCodes.left &&
-        this.$refs.input.selectionStart === 0
+        vm.$refs.input.selectionStart === 0
       ) {
-        this.updateSelf()
+        updateSelf()
       }
+      vm.changeSelectedIndex(keyCode)
+    }
 
-      // The ordering is important here
-      // allows new value to be updated
-      // and then moves the index to the
-      // proper location
-      this.changeSelectedIndex(keyCode)
-    },
-    onTabDown (e) {
-      // When adding tags, if searching and
-      // there is not a filtered options,
-      // add the value to the tags list
-      if (this.multiple &&
-        this.internalSearch &&
-        this.getMenuIndex() === -1
+    function onTabDown (e) {
+      if (vm.multiple &&
+        vm.internalSearch &&
+        vm.getMenuIndex() === -1
       ) {
         e.preventDefault()
         e.stopPropagation()
-
-        return this.updateTags()
+        return updateTags()
       }
+      VAutocomplete.options.methods.onTabDown.call(vm, e)
+    }
 
-      VAutocomplete.options.methods.onTabDown.call(this, e)
-    },
-    selectItem (item) {
-      // Currently only supports items:<string[]>
-      if (this.editingIndex > -1) {
-        this.updateEditing()
+    function selectItem (item) {
+      if (editingIndex.value > -1) {
+        updateEditing()
       } else {
-        VAutocomplete.options.methods.selectItem.call(this, item)
+        VAutocomplete.options.methods.selectItem.call(vm, item)
       }
-    },
-    setSelectedItems () {
-      if (this.internalValue == null ||
-        this.internalValue === ''
+    }
+
+    function setSelectedItems () {
+      if (vm.internalValue == null ||
+        vm.internalValue === ''
       ) {
-        this.selectedItems = []
+        vm.selectedItems = []
       } else {
-        this.selectedItems = this.multiple ? this.internalValue : [this.internalValue]
+        vm.selectedItems = vm.multiple ? vm.internalValue : [vm.internalValue]
       }
-    },
-    setValue (value = this.internalSearch) {
-      VSelect.options.methods.setValue.call(this, value)
-    },
-    updateEditing () {
-      const value = this.internalValue.slice()
-      value[this.editingIndex] = this.internalSearch
+    }
 
-      this.setValue(value)
+    function setValue (value = vm.internalSearch) {
+      VSelect.options.methods.setValue.call(vm, value)
+    }
 
-      this.editingIndex = -1
-    },
-    updateCombobox () {
-      const isUsingSlot = Boolean(this.$scopedSlots.selection) || this.hasChips
+    function updateEditing () {
+      const value = vm.internalValue.slice()
+      value[editingIndex.value] = vm.internalSearch
+      setValue(value)
+      editingIndex.value = -1
+    }
 
-      // If search is not dirty and is
-      // using slot, do nothing
-      if (isUsingSlot && !this.searchIsDirty) return
+    function updateCombobox () {
+      const isUsingSlot = Boolean(vm.$scopedSlots.selection) || vm.hasChips
+      if (isUsingSlot && !vm.searchIsDirty) return
+      if (vm.internalSearch !== vm.getText(vm.internalValue)) setValue()
+      if (isUsingSlot) vm.internalSearch = undefined
+    }
 
-      // The internal search is not matching
-      // the internal value, update the input
-      if (this.internalSearch !== this.getText(this.internalValue)) this.setValue()
+    function updateSelf () {
+      vm.multiple ? updateTags() : updateCombobox()
+    }
 
-      // Reset search if using slot
-      // to avoid a double input
-      if (isUsingSlot) this.internalSearch = undefined
-    },
-    updateSelf () {
-      this.multiple ? this.updateTags() : this.updateCombobox()
-    },
-    updateTags () {
-      const menuIndex = this.getMenuIndex()
-
-      // If the user is not searching
-      // and no menu item is selected
-      // do nothing
-      if (menuIndex < 0 &&
-        !this.searchIsDirty
-      ) return
-
-      if (this.editingIndex > -1) {
-        return this.updateEditing()
+    function updateTags () {
+      const menuIndex = vm.getMenuIndex()
+      if (menuIndex < 0 && !vm.searchIsDirty) return
+      if (editingIndex.value > -1) {
+        return updateEditing()
       }
-
-      const index = this.selectedItems.indexOf(this.internalSearch)
-      // If it already exists, do nothing
-      // this might need to change to bring
-      // the duplicated item to the last entered
+      const index = vm.selectedItems.indexOf(vm.internalSearch)
       if (index > -1) {
-        const internalValue = this.internalValue.slice()
+        const internalValue = vm.internalValue.slice()
         internalValue.splice(index, 1)
-
-        this.setValue(internalValue)
+        setValue(internalValue)
       }
+      if (menuIndex > -1) return (vm.internalSearch = null)
+      selectItem(vm.internalSearch)
+      vm.internalSearch = null
+    }
 
-      // If menu index is greater than 1
-      // the selection is handled elsewhere
-      // TODO: find out where
-      if (menuIndex > -1) return (this.internalSearch = null)
-
-      this.selectItem(this.internalSearch)
-      this.internalSearch = null
+    return {
+      editingIndex,
+      counterValue,
+      hasSlot,
+      isAnyValueAllowed,
+      menuCanShow,
+      onFilteredItemsChanged,
+      onInternalSearchChanged,
+      genChipSelection,
+      onChipInput,
+      onEnterDown,
+      onKeyDown,
+      onTabDown,
+      selectItem,
+      setSelectedItems,
+      setValue,
+      updateEditing,
+      updateCombobox,
+      updateSelf,
+      updateTags
     }
   }
-}
+})
+
