@@ -1,33 +1,50 @@
 // Components
 import VWindow from './VWindow'
 
-// Mixins
-import Bootable from '../../mixins/bootable'
-import { factory as GroupableFactory } from '../../mixins/groupable'
-
 // Directives
 import Touch from '../../directives/touch'
 
+// Composables
+import useBootable from '../../composables/useBootable'
+import { factory as groupableFactory } from '../../composables/useGroupable'
+import useRegistrableInject from '../../composables/useRegistrableInject'
+
 // Utilities
 import { convertToUnit } from '../../util/helpers'
-import { ExtractVue } from './../../util/mixins'
-import mixins from '../../util/mixins'
 
 // Types
-import Vue, { VNode } from 'vue'
+import { defineComponent, h, ref, computed, getCurrentInstance, onMounted, onBeforeUnmount } from 'vue'
+import { VNodeDirective } from 'vue/types/vnode'
 
 type VBaseWindow = InstanceType<typeof VWindow>
 
-interface options extends Vue {
-  $el: HTMLElement
-  windowGroup: VBaseWindow
+const useWindowGroupable = groupableFactory('windowGroup', 'v-window-item', 'v-window')
+
+function legacyWindowItemRender (this: any, h: any) {
+  const div = h('div', {
+    staticClass: 'v-window-item',
+    directives: [{
+      name: 'show',
+      value: this.isActive
+    }],
+    on: this.$listeners
+  }, this.showLazyContent(this.genDefaultSlot()))
+
+  return h('transition', {
+    props: {
+      name: this.computedTransition
+    },
+    on: {
+      afterEnter: this.onAfterEnter,
+      beforeEnter: this.onBeforeEnter,
+      leave: this.onLeave,
+      enter: this.onEnter,
+      enterCancelled: this.onEnterCancelled
+    }
+  }, [div])
 }
 
-export default mixins<options & ExtractVue<[typeof Bootable]>>(
-  Bootable,
-  GroupableFactory('windowGroup', 'v-window-item', 'v-window')
-  /* @vue/component */
-).extend({
+const VWindowItem = defineComponent({
   name: 'v-window-item',
 
   directives: {
@@ -45,115 +62,180 @@ export default mixins<options & ExtractVue<[typeof Bootable]>>(
     },
     value: {
       required: false
-    }
+    },
+    lazy: Boolean
   },
 
-  data () {
-    return {
-      done: null as null | (() => void),
-      isActive: false,
-      wasCancelled: false
-    }
-  },
+  setup (props, { slots, attrs, emit }) {
+    const vm = getCurrentInstance()
+    const proxy = vm?.proxy as any
+    const windowGroup = useRegistrableInject('windowGroup', 'v-window-item', 'v-window') as VBaseWindow | null
+    const { isActive } = useWindowGroupable(props, emit)
+    const { isBooted, showLazyContent } = useBootable(props, { isActive })
 
-  computed: {
-    computedTransition (): string | boolean {
-      if (!this.windowGroup.internalReverse) {
-        return typeof this.transition !== 'undefined'
-          ? this.transition || ''
-          : this.windowGroup.computedTransition
+    const done = ref<null | (() => void)>(null)
+    const wasCancelled = ref(false)
+
+    const computedTransition = computed(() => {
+      const group = windowGroup as any
+
+      if (!group || !group.internalReverse) {
+        return typeof props.transition !== 'undefined'
+          ? props.transition || ''
+          : group?.computedTransition ?? ''
       }
 
-      return typeof this.reverseTransition !== 'undefined'
-        ? this.reverseTransition || ''
-        : this.windowGroup.computedTransition
+      return typeof props.reverseTransition !== 'undefined'
+        ? props.reverseTransition || ''
+        : group?.computedTransition ?? ''
+    })
+
+    if (proxy) {
+      Object.defineProperties(proxy, {
+        done: {
+          get: () => done.value,
+          set: (val) => { done.value = val }
+        },
+        isActive: {
+          get: () => isActive.value,
+          set: (val) => { isActive.value = val }
+        },
+        isBooted: {
+          get: () => isBooted.value,
+          set: (val) => { isBooted.value = val }
+        },
+        wasCancelled: {
+          get: () => wasCancelled.value,
+          set: (val) => { wasCancelled.value = val }
+        },
+        computedTransition: {
+          get: () => computedTransition.value
+        }
+      })
+
+      Object.assign(proxy, {
+        genDefaultSlot,
+        onAfterEnter,
+        onBeforeEnter,
+        onLeave,
+        onEnter,
+        onEnterCancelled,
+        onTransitionEnd,
+        showLazyContent,
+        windowGroup
+      })
     }
-  },
 
-  mounted () {
-    this.$el.addEventListener('transitionend', this.onTransitionEnd, false)
-  },
+    onMounted(() => {
+      proxy?.$el?.addEventListener('transitionend', onTransitionEnd, false)
+    })
 
-  beforeDestroy () {
-    this.$el.removeEventListener('transitionend', this.onTransitionEnd, false)
-  },
+    onBeforeUnmount(() => {
+      proxy?.$el?.removeEventListener('transitionend', onTransitionEnd, false)
+    })
 
-  methods: {
-    genDefaultSlot () {
-      return this.$slots.default
-    },
-    onAfterEnter () {
-      if (this.wasCancelled) {
-        this.wasCancelled = false
+    function genDefaultSlot () {
+      return slots.default?.()
+    }
+
+    function onAfterEnter () {
+      if (wasCancelled.value) {
+        wasCancelled.value = false
         return
       }
 
       requestAnimationFrame(() => {
-        this.windowGroup.internalHeight = undefined
-        this.windowGroup.isActive = false
+        if (!windowGroup) return
+        windowGroup.internalHeight = undefined
+        windowGroup.isActive = false
       })
-    },
-    onBeforeEnter () {
-      this.windowGroup.isActive = true
-    },
-    onLeave (el: HTMLElement) {
-      this.windowGroup.internalHeight = convertToUnit(el.clientHeight)
-    },
-    onEnterCancelled () {
-      this.wasCancelled = true
-    },
-    onEnter (el: HTMLElement, done: () => void) {
-      const isBooted = this.windowGroup.isBooted
+    }
 
-      if (isBooted) this.done = done
+    function onBeforeEnter () {
+      if (!windowGroup) return
+      windowGroup.isActive = true
+    }
+
+    function onLeave (el: HTMLElement) {
+      if (!windowGroup) return
+      windowGroup.internalHeight = convertToUnit(el.clientHeight)
+    }
+
+    function onEnterCancelled () {
+      wasCancelled.value = true
+    }
+
+    function onEnter (el: HTMLElement, transitionDone: () => void) {
+      const group = windowGroup as any
+      const booted = group?.isBooted
+
+      if (booted) done.value = transitionDone
 
       requestAnimationFrame(() => {
-        if (!this.computedTransition) return done()
+        if (!computedTransition.value) return transitionDone()
 
-        this.windowGroup.internalHeight = convertToUnit(el.clientHeight)
+        if (group) {
+          group.internalHeight = convertToUnit(el.clientHeight)
+        }
 
-        // On initial render, there is no transition
-        // Vue leaves a `enter` transition class
-        // if done is called too fast
-        !isBooted && setTimeout(done, 100)
+        !booted && setTimeout(transitionDone, 100)
       })
-    },
-    onTransitionEnd (e: TransitionEvent) {
-      // This ensures we only call done
-      // when the element transform
-      // completes
+    }
+
+    function onTransitionEnd (e: TransitionEvent) {
       if (
         e.propertyName !== 'transform' ||
-        e.target !== this.$el ||
-        !this.done
+        e.target !== proxy?.$el ||
+        !done.value
       ) return
 
-      this.done()
-      this.done = null
+      done.value()
+      done.value = null
     }
-  },
 
-  render (h): VNode {
-    const div = h('div', {
-      staticClass: 'v-window-item',
-      directives: [{
+    return () => {
+      const restAttrs = { ...attrs } as Record<string, any>
+      const className = restAttrs.class
+      const style = restAttrs.style
+      const on = restAttrs.on
+      delete restAttrs.class
+      delete restAttrs.style
+      delete restAttrs.on
+
+      const directives = [{
         name: 'show',
-        value: this.isActive
-      }],
-      on: this.$listeners
-    }, this.showLazyContent(this.genDefaultSlot()))
+        value: isActive.value
+      } as VNodeDirective]
 
-    return h('transition', {
-      props: {
-        name: this.computedTransition
-      },
-      on: {
-        afterEnter: this.onAfterEnter,
-        beforeEnter: this.onBeforeEnter,
-        leave: this.onLeave,
-        enter: this.onEnter,
-        enterCancelled: this.onEnterCancelled
-      }
-    }, [div])
+      const div = h('div', {
+        staticClass: 'v-window-item',
+        class: className,
+        style,
+        directives,
+        on,
+        ...restAttrs
+      }, showLazyContent(genDefaultSlot()))
+
+      return h('transition', {
+        props: {
+          name: computedTransition.value
+        },
+        on: {
+          afterEnter: onAfterEnter,
+          beforeEnter: onBeforeEnter,
+          leave: onLeave,
+          enter: onEnter,
+          enterCancelled: onEnterCancelled
+        }
+      }, [div])
+    }
   }
 })
+
+;(VWindowItem as any).options = {
+  render: legacyWindowItemRender
+}
+
+;(VWindowItem as any).extend = (ext: any) => defineComponent({ ...ext, extends: VWindowItem })
+
+export default VWindowItem

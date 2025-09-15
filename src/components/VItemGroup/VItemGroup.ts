@@ -133,6 +133,46 @@ export const BaseItemGroup = defineComponent({
       nextTick(updateItemsState)
     })
 
+    const proxy = vm?.proxy as any
+
+    if (proxy) {
+      Object.assign(proxy, {
+        getValue,
+        onClick,
+        register,
+        unregister,
+        updateItem,
+        updateItemsState,
+        updateInternalValue,
+        updateMandatory,
+        updateMultiple,
+        updateSingle,
+      })
+
+      Object.defineProperties(proxy, {
+        internalLazyValue: {
+          get: () => internalLazyValue.value,
+          set: (val) => { internalLazyValue.value = val }
+        },
+        internalValue: {
+          get: () => internalValue.value,
+          set: (val) => { internalValue.value = val }
+        },
+        items: {
+          get: () => items
+        },
+        selectedItems: {
+          get: () => selectedItems.value
+        },
+        selectedValues: {
+          get: () => selectedValues.value
+        },
+        toggleMethod: {
+          get: () => toggleMethod.value
+        }
+      })
+    }
+
     provide('itemGroup', { register, unregister, activeClass: props.activeClass })
 
     const classes = computed(() => ({
