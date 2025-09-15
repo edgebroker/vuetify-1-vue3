@@ -1,5 +1,5 @@
 import { computed, getCurrentInstance, ref } from 'vue'
-import { getZIndex } from '../../packages/vuetify/src/util/helpers'
+import { getZIndex } from '../utl/helpers'
 
 export default function useStackable () {
   const { proxy } = getCurrentInstance()

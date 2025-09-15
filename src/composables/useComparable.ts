@@ -1,4 +1,4 @@
-import { deepEqual } from '../../packages/vuetify/src/util/helpers'
+import { deepEqual } from '../utl/helpers'
 
 export const comparableProps = {
   valueComparator: {
