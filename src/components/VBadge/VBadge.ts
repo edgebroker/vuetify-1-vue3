@@ -1,23 +1,16 @@
 // Styles
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-// Mixins
-import Colorable from '../../mixins/colorable'
-import Toggleable from '../../mixins/toggleable'
-import { factory as PositionableFactory } from '../../mixins/positionable'
-import Transitionable from '../../mixins/transitionable'
+// Composables
+import useColorable from '../../composables/useColorable'
+import useToggleable from '../../composables/useToggleable'
+import usePositionable, { positionPropsFactory } from '../../composables/usePositionable'
+import useTransitionable, { transitionableProps } from '../../composables/useTransitionable'
 
 // Types
-import { VNode } from 'vue'
-import mixins from '../../util/mixins'
+import { defineComponent, h, withDirectives, vShow, computed } from 'vue'
 
-export default mixins(
-  Colorable,
-  Toggleable,
-  PositionableFactory(['left', 'bottom']),
-  Transitionable
-/* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-badge',
 
   props: {
@@ -32,41 +25,44 @@ export default mixins(
     },
     value: {
       default: true
-    }
+    },
+    ...positionPropsFactory(['left', 'bottom']),
+    ...transitionableProps
   },
 
-  computed: {
-    classes (): object {
-      return {
-        'v-badge--bottom': this.bottom,
-        'v-badge--left': this.left,
-        'v-badge--overlap': this.overlap
-      }
+  setup (props, { slots, attrs, emit }) {
+    const { setBackgroundColor } = useColorable(props)
+    const { isActive } = useToggleable(props, emit)
+    const { positionClasses } = usePositionable(props, ['left', 'bottom'])
+    const { transition, origin, mode } = useTransitionable(props)
+
+    const classes = computed(() => ({
+      ...positionClasses.value,
+      'v-badge--overlap': props.overlap
+    }))
+
+    return () => {
+      const badge = slots.badge && [
+        withDirectives(
+          h('span', setBackgroundColor(props.color, {
+            class: 'v-badge__badge',
+            ...attrs
+          }), slots.badge()),
+          [[vShow, isActive.value]]
+        )
+      ]
+
+      return h('span', {
+        class: ['v-badge', classes.value]
+      }, [
+        slots.default?.(),
+        h('transition', {
+          name: transition.value,
+          origin: origin.value,
+          mode: mode.value
+        }, badge)
+      ])
     }
-  },
-
-  render (h): VNode {
-    const badge = this.$slots.badge && [h('span', this.setBackgroundColor(this.color, {
-      staticClass: 'v-badge__badge',
-      attrs: this.$attrs,
-      directives: [{
-        name: 'show',
-        value: this.isActive
-      }]
-    }), this.$slots.badge)]
-
-    return h('span', {
-      staticClass: 'v-badge',
-      'class': this.classes
-    }, [
-      this.$slots.default,
-      h('transition', {
-        props: {
-          name: this.transition,
-          origin: this.origin,
-          mode: this.mode
-        }
-      }, badge)
-    ])
   }
 })
+
