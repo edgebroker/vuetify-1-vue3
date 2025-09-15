@@ -1,103 +1,92 @@
-// Mixins
-import { factory as GroupableFactory } from '../../mixins/groupable'
-import Routable from '../../mixins/routable'
-import Themeable from '../../mixins/themeable'
+// Composables
+import useRoutable, { routableProps } from '../../composables/useRoutable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
+import { factory as useGroupableFactory } from '../../composables/useGroupable'
 
-// Utilities
-import { getObjectValueByPath } from '../../util/helpers'
+// Utils
+import { defineComponent, h, computed, ref, getCurrentInstance, watch, nextTick, onMounted } from 'vue'
 
-/* @vue/component */
-export default {
+const useTabGroupable = useGroupableFactory('tabGroup', 'v-tab', 'v-tabs')
+
+export default defineComponent({
   name: 'v-tab',
 
-  mixins: [
-    Routable,
-    // Must be after routable
-    // to overwrite activeClass
-    GroupableFactory('tabGroup'),
-    Themeable
-  ],
-
   props: {
+    ...routableProps,
+    ...themeProps,
     ripple: {
       type: [Boolean, Object],
-      default: true
-    }
+      default: true,
+    },
   },
 
-  computed: {
-    classes () {
-      return {
-        'v-tabs__item': true,
-        'v-tabs__item--disabled': this.disabled,
-        ...this.groupClasses
-      }
-    },
-    value () {
-      let to = this.to || this.href || ''
+  emits: ['change', 'click'],
 
-      if (this.$router &&
-        this.to === Object(this.to)
-      ) {
-        const resolve = this.$router.resolve(
-          this.to,
-          this.$route,
-          this.append
+  setup (props, { attrs, slots, emit, expose }) {
+    const { generateRouteLink } = useRoutable(props, { attrs, emit })
+    const { groupClasses, toggle, isActive, activeClass } = useTabGroupable(props, emit)
+    useThemeable(props)
+
+    const linkRef = ref()
+    const vm = getCurrentInstance()
+
+    const classes = computed(() => ({
+      'v-tabs__item': true,
+      'v-tabs__item--disabled': props.disabled,
+      ...groupClasses.value,
+    }))
+
+    const value = computed(() => {
+      let to = props.to ?? props.href ?? ''
+
+      if (vm?.proxy?.$router && props.to === Object(props.to)) {
+        const resolve = vm.proxy.$router.resolve(
+          props.to,
+          vm.proxy.$route,
+          props.append,
         )
-
         to = resolve.href
       }
 
-      return to.replace('#', '')
-    }
-  },
+      return to.toString().replace('#', '')
+    })
 
-  watch: {
-    $route: 'onRouteChange'
-  },
+    function onRouteChange () {
+      if (!props.to || !linkRef.value) return
 
-  mounted () {
-    this.onRouteChange()
-  },
-
-  methods: {
-    click (e) {
-      // If user provides an
-      // actual link, do not
-      // prevent default
-      if (this.href &&
-        this.href.indexOf('#') > -1
-      ) e.preventDefault()
-
-      this.$emit('click', e)
-
-      this.to || this.toggle()
-    },
-    onRouteChange () {
-      if (!this.to || !this.$refs.link) return
-
-      const path = `_vnode.data.class.${this.activeClass}`
-
-      this.$nextTick(() => {
-        if (getObjectValueByPath(this.$refs.link, path)) {
-          this.toggle()
+      nextTick(() => {
+        const target = linkRef.value.$el ?? linkRef.value
+        if (!target || !activeClass.value) return
+        const classList = target.classList || target.$el?.classList
+        if (classList && classList.contains(activeClass.value)) {
+          toggle()
         }
       })
     }
+
+    watch(() => vm?.proxy?.$route, () => onRouteChange())
+    onMounted(() => onRouteChange())
+
+    expose({ toggle, isActive, value })
+
+    return () => {
+      const link = generateRouteLink(classes.value)
+      const { data } = link
+
+      const originalClick = data.on?.click
+      data.on = {
+        ...data.on,
+        click: (e) => {
+          if (props.href && props.href.indexOf('#') > -1) e.preventDefault()
+          originalClick && originalClick(e)
+          if (!props.to) toggle()
+        },
+      }
+
+      const tag = props.disabled ? 'div' : link.tag
+      data.ref = linkRef
+
+      return h('div', { staticClass: 'v-tabs__div' }, [h(tag, data, slots.default?.())])
+    }
   },
-
-  render (h) {
-    const link = this.generateRouteLink(this.classes)
-    const { data } = link
-
-    // If disabled, use div as anchor tags do not support
-    // being disabled
-    const tag = this.disabled ? 'div' : link.tag
-
-    data.ref = 'link'
-
-    return h('div', {
-      staticClass: 'v-tabs__div'
-    }, [h(tag, data, this.$slots.default)])
-  }
-}
+})
