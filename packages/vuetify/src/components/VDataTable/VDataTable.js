@@ -1,5 +1,4 @@
-import '../../stylus/components/_tables.styl'
-import '../../stylus/components/_data-table.styl'
+import "@/css/vuetify.css"
 
 import DataIterable from '../../mixins/data-iterable'
 

@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_selection-controls.styl'
+import "@/css/vuetify.css"
 
 // Components
 import VIcon from '../VIcon'

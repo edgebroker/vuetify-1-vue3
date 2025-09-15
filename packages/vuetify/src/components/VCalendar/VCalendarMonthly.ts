@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_calendar-weekly.styl'
+import "@/css/vuetify.css"
 
 // Mixins
 import VCalendarWeekly from './VCalendarWeekly'

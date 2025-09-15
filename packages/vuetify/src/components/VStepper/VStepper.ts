@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_steppers.styl'
+import "@/css/vuetify.css"
 
 // Components
 import VStepperStep from './VStepperStep'

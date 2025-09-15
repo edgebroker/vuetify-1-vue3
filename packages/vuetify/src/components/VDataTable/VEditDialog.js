@@ -1,4 +1,4 @@
-import '../../stylus/components/_small-dialog.styl'
+import "@/css/vuetify.css"
 
 // Mixins
 import Returnable from '../../mixins/returnable'

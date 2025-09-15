@@ -1,6 +1,5 @@
 // Styles
-import '../../stylus/components/_text-fields.styl'
-import '../../stylus/components/_select.styl'
+import "@/css/vuetify.css"
 
 // Components
 import VChip from '../VChip'

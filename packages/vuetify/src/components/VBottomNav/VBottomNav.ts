@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_bottom-navs.styl'
+import "@/css/vuetify.css"
 
 // Mixins
 import Applicationable from '../../mixins/applicationable'

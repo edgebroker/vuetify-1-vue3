@@ -1,4 +1,4 @@
-import '../../../stylus/components/_date-picker-table.styl'
+import "@/css/vuetify.css"
 
 // Directives
 import Touch, { TouchWrapper } from '../../../directives/touch'

@@ -1,4 +1,4 @@
-import '../../stylus/components/_icons.styl'
+import "@/css/vuetify.css"
 // Mixins
 import Colorable from '../../mixins/colorable'
 import Sizeable from '../../mixins/sizeable'

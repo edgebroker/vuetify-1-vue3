@@ -1,4 +1,4 @@
-import '../../stylus/components/_app.styl'
+import "@/css/vuetify.css"
 
 // Component level mixins
 import AppTheme from './mixins/app-theme'

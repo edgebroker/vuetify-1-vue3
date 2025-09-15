@@ -1,4 +1,4 @@
-import '../../stylus/components/_snackbars.styl'
+import "@/css/vuetify.css"
 
 import Colorable from '../../mixins/colorable'
 import Toggleable from '../../mixins/toggleable'

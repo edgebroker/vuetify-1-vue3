@@ -1,4 +1,4 @@
-import '../../stylus/components/_dialogs.styl'
+import "@/css/vuetify.css"
 
 // Mixins
 import Dependent from '../../mixins/dependent'

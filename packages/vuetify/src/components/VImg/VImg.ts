@@ -1,4 +1,4 @@
-import '../../stylus/components/_images.styl'
+import "@/css/vuetify.css"
 
 // Types
 import { VNode } from 'vue'

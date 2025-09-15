@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_content.styl'
+import "@/css/vuetify.css"
 
 // Mixins
 import SSRBootable from '../../mixins/ssr-bootable'

@@ -1,4 +1,4 @@
-import '../../stylus/components/_date-picker-header.styl'
+import "@/css/vuetify.css"
 
 // Components
 import VBtn from '../VBtn'

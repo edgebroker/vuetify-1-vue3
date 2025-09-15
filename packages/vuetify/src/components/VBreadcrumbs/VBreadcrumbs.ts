@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_breadcrumbs.styl'
+import "@/css/vuetify.css"
 
 // Types
 import { VNode } from 'vue'

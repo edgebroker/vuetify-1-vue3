@@ -1,4 +1,4 @@
-import '../../stylus/components/_date-picker-title.styl'
+import "@/css/vuetify.css"
 
 // Components
 import VIcon from '../VIcon'

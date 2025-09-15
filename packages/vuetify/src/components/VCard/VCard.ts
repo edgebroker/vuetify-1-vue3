@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_cards.styl'
+import "@/css/vuetify.css"
 
 // Extensions
 import VSheet from '../VSheet'

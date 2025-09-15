@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_tabs.styl'
+import "@/css/vuetify.css"
 
 // Extensions
 import { BaseItemGroup } from '../VItemGroup/VItemGroup'

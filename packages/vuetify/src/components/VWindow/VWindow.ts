@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_windows.styl'
+import "@/css/vuetify.css"
 
 // Components
 import { BaseItemGroup } from '../VItemGroup/VItemGroup'

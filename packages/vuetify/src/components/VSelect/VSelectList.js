@@ -1,4 +1,4 @@
-import '../../stylus/components/_cards.styl'
+import "@/css/vuetify.css"
 
 // Components
 import VCheckbox from '../VCheckbox'

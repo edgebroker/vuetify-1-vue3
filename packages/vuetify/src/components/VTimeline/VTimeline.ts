@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_timeline.styl'
+import "@/css/vuetify.css"
 
 // Types
 import { VNode } from 'vue'

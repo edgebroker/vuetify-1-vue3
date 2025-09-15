@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_range-sliders.styl'
+import "@/css/vuetify.css"
 
 // Extensions
 import VSlider from '../VSlider'

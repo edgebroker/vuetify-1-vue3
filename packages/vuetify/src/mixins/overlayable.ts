@@ -1,5 +1,5 @@
 // Styles
-import '../stylus/components/_overlay.styl'
+import "@/css/vuetify.css"
 
 // Utilities
 import { keyCodes, addPassiveEventListener } from '../util/helpers'

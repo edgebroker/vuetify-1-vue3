@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_carousel.styl'
+import "@/css/vuetify.css"
 
 // Extensions
 import VWindow from '../VWindow/VWindow'

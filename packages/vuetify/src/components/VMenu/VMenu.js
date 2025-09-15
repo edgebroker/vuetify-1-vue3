@@ -1,4 +1,4 @@
-import '../../stylus/components/_menus.styl'
+import "@/css/vuetify.css"
 
 import Vue from 'vue'
 

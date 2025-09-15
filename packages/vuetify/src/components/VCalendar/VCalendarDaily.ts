@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_calendar-daily.styl'
+import "@/css/vuetify.css"
 
 // Types
 import { VNode, VNodeChildren } from 'vue'

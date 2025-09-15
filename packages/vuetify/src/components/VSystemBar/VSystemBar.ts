@@ -1,4 +1,4 @@
-import '../../stylus/components/_system-bars.styl'
+import "@/css/vuetify.css"
 
 import Applicationable from '../../mixins/applicationable'
 import Colorable from '../../mixins/colorable'

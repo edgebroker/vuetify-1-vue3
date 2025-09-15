@@ -1,4 +1,4 @@
-import './stylus/app.styl'
+import "@/css/vuetify.css"
 import VuetifyComponent from './components/Vuetify'
 import * as components from './components'
 import directives from './directives'

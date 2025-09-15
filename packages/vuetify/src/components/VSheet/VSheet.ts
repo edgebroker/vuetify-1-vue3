@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_sheet.styl'
+import "@/css/vuetify.css"
 
 // Mixins
 import Colorable from '../../mixins/colorable'

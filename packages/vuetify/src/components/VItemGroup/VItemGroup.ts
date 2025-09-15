@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_item-group.styl'
+import "@/css/vuetify.css"
 
 // Mixins
 import Groupable from '../../mixins/groupable'
