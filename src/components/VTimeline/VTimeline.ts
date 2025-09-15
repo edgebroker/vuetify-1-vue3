@@ -1,38 +1,32 @@
 // Styles
 import "@/css/vuetify.css"
 
+// Composables
+import useThemeable, { themeProps } from '../../composables/useThemeable'
+
 // Types
-import { VNode } from 'vue'
-import mixins from '../../util/mixins'
+import { defineComponent, computed, h } from 'vue'
 
-// Mixins
-import Themeable from '../../mixins/themeable'
-
-export default mixins(
-  Themeable
-/* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-timeline',
 
   props: {
+    ...themeProps,
     alignTop: Boolean,
-    dense: Boolean
+    dense: Boolean,
   },
 
-  computed: {
-    classes (): {} {
-      return {
-        'v-timeline--align-top': this.alignTop,
-        'v-timeline--dense': this.dense,
-        ...this.themeClasses
-      }
-    }
-  },
+  setup (props, { slots }) {
+    const { themeClasses } = useThemeable(props)
 
-  render (h): VNode {
-    return h('div', {
-      staticClass: 'v-timeline',
-      'class': this.classes
-    }, this.$slots.default)
+    const classes = computed(() => ({
+      'v-timeline--align-top': props.alignTop,
+      'v-timeline--dense': props.dense,
+      ...themeClasses.value,
+    }))
+
+    return () => h('div', {
+      class: ['v-timeline', classes.value],
+    }, slots.default?.())
   }
 })
