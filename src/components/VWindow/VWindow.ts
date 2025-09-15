@@ -8,17 +8,54 @@ import { BaseItemGroup } from '../VItemGroup/VItemGroup'
 import Touch from '../../directives/touch'
 
 // Types
-import { VNode, VNodeDirective } from 'vue/types/vnode'
+import { defineComponent, h, ref, computed, watch, provide, nextTick, getCurrentInstance, onMounted } from 'vue'
+import { VNodeDirective } from 'vue/types/vnode'
 
-/* @vue/component */
-export default BaseItemGroup.extend({
+function windowGetValue (this: any, item: any, i: number) {
+  const value = item && (item.value ?? item.id)
+  return value == null || value === '' ? i : value
+}
+
+function windowNext (this: any) {
+  const items: any[] = this.items || []
+  if (!items.length) return
+
+  this.isReverse = false
+
+  const index = typeof this.internalIndex === 'number' ? this.internalIndex : -1
+  const nextIndex = (index + 1 + items.length) % items.length
+  const item = items[nextIndex]
+
+  if (!item) return
+
+  const getValue = this.getValue || windowGetValue
+  this.internalValue = getValue.call(this, item, nextIndex)
+}
+
+function windowPrev (this: any) {
+  const items: any[] = this.items || []
+  if (!items.length) return
+
+  this.isReverse = true
+
+  const index = typeof this.internalIndex === 'number' ? this.internalIndex : -1
+  const lastIndex = (index + items.length - 1 + items.length) % items.length
+  const item = items[lastIndex]
+
+  if (!item) return
+
+  const getValue = this.getValue || windowGetValue
+  this.internalValue = getValue.call(this, item, lastIndex)
+}
+
+function windowUpdateReverse (this: any, val: number, oldVal: number) {
+  this.isReverse = val < oldVal
+}
+
+const VWindow = defineComponent({
   name: 'v-window',
 
-  provide (): object {
-    return {
-      windowGroup: this
-    }
-  },
+  extends: BaseItemGroup,
 
   directives: { Touch },
 
@@ -39,95 +76,149 @@ export default BaseItemGroup.extend({
     vertical: Boolean
   },
 
-  data () {
-    return {
-      internalHeight: undefined as undefined | string,
-      isActive: false,
-      isBooted: false,
-      isReverse: false
-    }
-  },
+  setup (props, { slots, attrs }) {
+    const vm = getCurrentInstance()
+    const proxy = vm?.proxy as any
 
-  computed: {
-    computedTransition (): string {
-      if (!this.isBooted) return ''
+    const internalHeight = ref<string | undefined>(undefined)
+    const isActive = ref(false)
+    const isBooted = ref(false)
+    const isReverse = ref(false)
 
-      const axis = this.vertical ? 'y' : 'x'
-      const direction = this.internalReverse === !this.$vuetify.rtl
-        ? '-reverse'
-        : ''
+    const internalReverse = computed(() => {
+      return props.reverse !== undefined ? props.reverse : isReverse.value
+    })
+
+    const computedTransition = computed(() => {
+      if (!isBooted.value) return ''
+
+      const axis = props.vertical ? 'y' : 'x'
+      const rtl = Boolean(proxy?.$vuetify?.rtl)
+      const direction = internalReverse.value === !rtl ? '-reverse' : ''
 
       return `v-window-${axis}${direction}-transition`
-    },
-    internalIndex (): number {
-      return this.items.findIndex((item, i) => {
-        return this.internalValue === this.getValue(item, i)
-      })
-    },
-    internalReverse (): boolean {
-      if (this.reverse !== undefined) return this.reverse
+    })
 
-      return this.isReverse
+    const internalIndex = computed(() => {
+      const items: any[] = proxy?.items || []
+      const getValue = proxy?.getValue || windowGetValue
+
+      return items.findIndex((item, i) => proxy?.internalValue === getValue.call(proxy, item, i))
+    })
+
+    function updateReverse (val: number, oldVal: number) {
+      if (!proxy) return
+      windowUpdateReverse.call(proxy, val, oldVal)
     }
-  },
 
-  watch: {
-    internalIndex: 'updateReverse'
-  },
+    watch(internalIndex, (val, oldVal) => {
+      updateReverse(val, oldVal)
+    })
 
-  mounted () {
-    this.$nextTick(() => (this.isBooted = true))
-  },
+    onMounted(() => {
+      nextTick(() => { isBooted.value = true })
+    })
 
-  methods: {
-    genContainer (): VNode {
-      return this.$createElement('div', {
+    if (proxy) {
+      Object.defineProperties(proxy, {
+        internalHeight: {
+          get: () => internalHeight.value,
+          set: (val) => { internalHeight.value = val }
+        },
+        isActive: {
+          get: () => isActive.value,
+          set: (val) => { isActive.value = val }
+        },
+        isBooted: {
+          get: () => isBooted.value,
+          set: (val) => { isBooted.value = val }
+        },
+        isReverse: {
+          get: () => isReverse.value,
+          set: (val) => { isReverse.value = val }
+        },
+        internalReverse: {
+          get: () => internalReverse.value
+        },
+        internalIndex: {
+          get: () => internalIndex.value
+        },
+        computedTransition: {
+          get: () => computedTransition.value
+        }
+      })
+
+      Object.assign(proxy, {
+        genContainer,
+        next: () => windowNext.call(proxy),
+        prev: () => windowPrev.call(proxy),
+        updateReverse: (val: number, oldVal: number) => updateReverse(val, oldVal)
+      })
+    }
+
+    provide('windowGroup', proxy)
+
+    function genContainer () {
+      return h('div', {
         staticClass: 'v-window__container',
         class: {
-          'v-window__container--is-active': this.isActive
+          'v-window__container--is-active': isActive.value
         },
         style: {
-          height: this.internalHeight
+          height: internalHeight.value
         }
-      }, this.$slots.default)
-    },
-    next () {
-      this.isReverse = false
-      const nextIndex = (this.internalIndex + 1) % this.items.length
-      const item = this.items[nextIndex]
-
-      this.internalValue = this.getValue(item, nextIndex)
-    },
-    prev () {
-      this.isReverse = true
-      const lastIndex = (this.internalIndex + this.items.length - 1) % this.items.length
-      const item = this.items[lastIndex]
-
-      this.internalValue = this.getValue(item, lastIndex)
-    },
-    updateReverse (val: number, oldVal: number) {
-      this.isReverse = val < oldVal
-    }
-  },
-
-  render (h): VNode {
-    const data = {
-      staticClass: 'v-window',
-      directives: [] as VNodeDirective[]
+      }, slots.default?.())
     }
 
-    if (!this.touchless) {
-      const value = this.touch || {
-        left: this.next,
-        right: this.prev
+    function next () {
+      proxy && windowNext.call(proxy)
+    }
+
+    function prev () {
+      proxy && windowPrev.call(proxy)
+    }
+
+    return () => {
+      const restAttrs = { ...attrs } as Record<string, any>
+      const className = restAttrs.class
+      const style = restAttrs.style
+      delete restAttrs.class
+      delete restAttrs.style
+
+      const data: any = {
+        staticClass: 'v-window',
+        class: className,
+        style,
+        directives: [] as VNodeDirective[],
+        ...restAttrs
       }
 
-      data.directives.push({
-        name: 'touch',
-        value
-      })
-    }
+      if (!props.touchless) {
+        const value = props.touch || {
+          left: next,
+          right: prev
+        }
 
-    return h('div', data, [this.genContainer()])
+        data.directives.push({
+          name: 'touch',
+          value
+        } as VNodeDirective)
+      }
+
+      return h('div', data, [genContainer()])
+    }
   }
 })
+
+;(VWindow as any).options = {
+  methods: {
+    getValue: windowGetValue,
+    next: windowNext,
+    prev: windowPrev,
+    updateReverse: windowUpdateReverse
+  }
+}
+
+;(VWindow as any).extend = (ext: any) => defineComponent({ ...ext, extends: VWindow })
+
+export default VWindow
