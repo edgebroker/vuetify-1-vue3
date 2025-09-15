@@ -1,50 +1,41 @@
 // Styles
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-// Mixins
-import SSRBootable from '../../mixins/ssr-bootable'
+// Composables
+import useSsrBootable from '../../composables/useSsrBootable'
 
-/* @vue/component */
-export default {
+// Types
+import { defineComponent, h, computed, getCurrentInstance } from 'vue'
+
+export default defineComponent({
   name: 'v-content',
-
-  mixins: [SSRBootable],
 
   props: {
     tag: {
       type: String,
-      default: 'main'
-    }
+      default: 'main',
+    },
   },
 
-  computed: {
-    styles () {
-      const {
-        bar, top, right, footer, insetFooter, bottom, left
-      } = this.$vuetify.application
+  setup (props, { slots }) {
+    useSsrBootable()
+    const vm = getCurrentInstance()
 
+    const styles = computed(() => {
+      const { bar, top, right, footer, insetFooter, bottom, left } = vm?.proxy.$vuetify.application
       return {
         paddingTop: `${top + bar}px`,
         paddingRight: `${right}px`,
         paddingBottom: `${footer + insetFooter + bottom}px`,
-        paddingLeft: `${left}px`
+        paddingLeft: `${left}px`,
       }
-    }
-  },
+    })
 
-  render (h) {
-    const data = {
-      staticClass: 'v-content',
-      style: this.styles,
-      ref: 'content'
-    }
-
-    return h(this.tag, data, [
-      h(
-        'div',
-        { staticClass: 'v-content__wrap' },
-        this.$slots.default
-      )
-    ])
+    return () => h(props.tag, {
+      class: 'v-content',
+      style: styles.value,
+      ref: 'content',
+    }, [h('div', { class: 'v-content__wrap' }, slots.default?.())])
   }
-}
+})
+
