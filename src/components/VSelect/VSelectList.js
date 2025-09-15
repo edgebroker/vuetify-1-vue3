@@ -12,9 +12,9 @@ import {
   VListTileTitle
 } from '../VList'
 
-// Mixins
-import Colorable from '../../mixins/colorable'
-import Themeable from '../../mixins/themeable'
+// Composables
+import useColorable, { colorProps } from '../../composables/useColorable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
 
 // Helpers
 import {
@@ -22,14 +22,12 @@ import {
   getPropertyFromItem
 } from '../../util/helpers'
 
-/* @vue/component */
-export default {
-  name: 'v-select-list',
+// Types
+import { defineComponent } from 'vue'
 
-  mixins: [
-    Colorable,
-    Themeable
-  ],
+/* @vue/component */
+export default defineComponent({
+  name: 'v-select-list',
 
   props: {
     action: Boolean,
@@ -63,6 +61,18 @@ export default {
     selectedItems: {
       type: Array,
       default: () => []
+    },
+    ...colorProps,
+    ...themeProps
+  },
+
+  setup (props) {
+    const { setTextColor } = useColorable(props)
+    const { themeClasses } = useThemeable(props)
+
+    return {
+      setTextColor,
+      themeClasses
     }
   },
 
@@ -243,4 +253,4 @@ export default {
       }, children)
     ])
   }
-}
+})

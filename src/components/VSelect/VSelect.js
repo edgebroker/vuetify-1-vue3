@@ -9,9 +9,10 @@ import VSelectList from './VSelectList'
 // Extensions
 import VTextField from '../VTextField/VTextField'
 
-// Mixins
-import Comparable from '../../mixins/comparable'
-import Filterable from '../../mixins/filterable'
+// Composables
+import useColorable from '../../composables/useColorable'
+import useComparable, { comparableProps } from '../../composables/useComparable'
+import useFilterable, { filterableProps } from '../../composables/useFilterable'
 
 // Directives
 import ClickOutside from '../../directives/click-outside'
@@ -19,6 +20,9 @@ import ClickOutside from '../../directives/click-outside'
 // Helpers
 import { camelize, getPropertyFromItem, keyCodes } from '../../util/helpers'
 import { consoleError, consoleWarn } from '../../util/console'
+
+// Types
+import { defineComponent } from 'vue'
 
 export const defaultMenuProps = {
   closeOnClick: false,
@@ -28,17 +32,14 @@ export const defaultMenuProps = {
 }
 
 /* @vue/component */
-export default VTextField.extend({
+export default defineComponent({
   name: 'v-select',
+
+  extends: VTextField,
 
   directives: {
     ClickOutside
   },
-
-  mixins: [
-    Comparable,
-    Filterable
-  ],
 
   props: {
     appendIcon: {
@@ -90,7 +91,21 @@ export default VTextField.extend({
     searchInput: {
       default: null
     },
-    smallChips: Boolean
+    smallChips: Boolean,
+    ...comparableProps,
+    ...filterableProps
+  },
+
+  setup (props) {
+    const { setTextColor } = useColorable(props)
+    const { valueComparator } = useComparable(props)
+    const { noDataText } = useFilterable(props)
+
+    return {
+      setTextColor,
+      valueComparator,
+      noDataText
+    }
   },
 
   data: vm => ({

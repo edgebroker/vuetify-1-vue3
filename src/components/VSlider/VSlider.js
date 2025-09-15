@@ -19,15 +19,21 @@ import {
   deepEqual
 } from '../../util/helpers'
 import { consoleWarn } from '../../util/console'
-import Loadable from '../../mixins/loadable'
+
+// Composables
+import useColorable from '../../composables/useColorable'
+import useLoadable, { loadableProps } from '../../composables/useLoadable'
+
+// Types
+import { defineComponent } from 'vue'
 
 /* @vue/component */
-export default VInput.extend({
+export default defineComponent({
   name: 'v-slider',
 
-  directives: { ClickOutside },
+  extends: VInput,
 
-  mixins: [Loadable],
+  directives: { ClickOutside },
 
   props: {
     alwaysDirty: Boolean,
@@ -75,7 +81,19 @@ export default VInput.extend({
       type: String,
       default: null
     },
-    value: [Number, String]
+    value: [Number, String],
+    ...loadableProps
+  },
+
+  setup (props, context) {
+    const { setBackgroundColor, setTextColor } = useColorable(props)
+    const { genProgress } = useLoadable(props, context)
+
+    return {
+      setBackgroundColor,
+      setTextColor,
+      genProgress
+    }
   },
 
   data: vm => ({

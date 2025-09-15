@@ -4,19 +4,19 @@ import "@/css/vuetify.css"
 // Components
 import VIcon from '../VIcon'
 
-// Mixins
-import Colorable from '../../mixins/colorable'
-import Sizeable from '../../mixins/sizeable'
-import Rippleable from '../../mixins/rippleable'
-import Themeable from '../../mixins/themeable'
+// Composables
+import useColorable from '../../composables/useColorable'
 import useDelayable from '../../composables/useDelayable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
+import { rippleableProps } from '../../composables/useRippleable'
+import { sizeableProps } from '../../composables/useSizeable'
 
 // Utilities
 import { createRange } from '../../util/helpers'
-import mixins from '../../util/mixins'
 
 // Types
-import { VNode, VNodeDirective, VNodeChildren } from 'vue'
+import { defineComponent, onBeforeUnmount } from 'vue'
+import type { VNode, VNodeDirective, VNodeChildren } from 'vue'
 
 type ItemSlotProps = {
   index: number
@@ -29,12 +29,7 @@ type ItemSlotProps = {
 }
 
 /* @vue/component */
-export default mixins(
-  Colorable,
-  Rippleable,
-  Sizeable,
-  Themeable
-).extend({
+export default defineComponent({
   name: 'v-rating',
 
   props: {
@@ -78,11 +73,26 @@ export default mixins(
     closeDelay: {
       type: [Number, String],
       default: 0
-    }
+    },
+    ...rippleableProps,
+    ...sizeableProps,
+    ...themeProps
   },
 
   setup (props) {
-    return useDelayable(props)
+    const { setTextColor } = useColorable(props)
+    const { themeClasses } = useThemeable(props)
+    const delayable = useDelayable(props)
+
+    onBeforeUnmount(() => {
+      delayable.clearDelay()
+    })
+
+    return {
+      setTextColor,
+      themeClasses,
+      ...delayable
+    }
   },
 
   data () {
@@ -231,6 +241,7 @@ export default mixins(
     return h('div', {
       staticClass: 'v-rating',
       class: {
+        ...this.themeClasses,
         'v-rating--readonly': this.readonly,
         'v-rating--dense': this.dense
       }
