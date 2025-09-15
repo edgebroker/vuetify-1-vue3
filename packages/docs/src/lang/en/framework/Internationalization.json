@@ -5,7 +5,7 @@
   "gettingStartedText": "To set the available locales or the current locale, supply the `lang` option when installing Vuetify. The provided `locales` property will be merged with the already existing locales. You can change the locale during runtime through the `$vuetify` object on the Vue instance.",
   "availableLocalesText": "Currently Vuetify provides translations in the following languages:",
   "createTranslation": "## Create translation",
-  "createTranslationText": "To create your own translation, use the code below or copy and rename the file `vuetify/src/locale/en.ts` to your project and make your changes.",
+  "createTranslationText": "To create your own translation, use the code below or copy and rename the file `vuetify/src/locale/en.js` to your project and make your changes.",
   "customComponents": "## Custom components",
   "customComponentsText": "If you are building custom Vuetify components that need to hook into the internationalization engine, you can use the `t` function which exists both directly on the `$vuetify` object and on `$vuetify.lang`.",
   "api": {

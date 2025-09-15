@@ -1,4 +1,4 @@
-import en from '../../../locale/en'
+import en from '@/locale/en'
 import { getObjectValueByPath } from '../../../util/helpers'
 import { consoleError, consoleWarn } from '../../../util/console'
 import { VuetifyUseOptions as Options } from 'vuetify/types'
