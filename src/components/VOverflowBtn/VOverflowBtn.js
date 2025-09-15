@@ -10,9 +10,12 @@ import VBtn from '../VBtn'
 
 import { consoleWarn } from '../../util/console'
 
-/* @vue/component */
-export default VAutocomplete.extend({
+import { defineComponent, getCurrentInstance, computed } from 'vue'
+
+export default defineComponent({
   name: 'v-overflow-btn',
+
+  extends: VAutocomplete,
 
   props: {
     segmented: Boolean,
@@ -20,72 +23,85 @@ export default VAutocomplete.extend({
     transition: VSelect.options.props.transition
   },
 
-  computed: {
-    classes () {
-      return Object.assign(VAutocomplete.options.computed.classes.call(this), {
+  setup (props) {
+    const vm = getCurrentInstance()
+    const proxy = vm?.proxy
+
+    const classes = computed(() => Object.assign({},
+      proxy ? VAutocomplete.options.computed.classes.call(proxy) : {},
+      {
         'v-overflow-btn': true,
-        'v-overflow-btn--segmented': this.segmented,
-        'v-overflow-btn--editable': this.editable
-      })
-    },
-    isAnyValueAllowed () {
-      return this.editable ||
-        VAutocomplete.options.computed.isAnyValueAllowed.call(this)
-    },
-    isSingle () {
-      return true
-    },
-    computedItems () {
-      return this.segmented ? this.allItems : this.filteredItems
-    },
-    $_menuProps () {
-      const props = VAutocomplete.options.computed.$_menuProps.call(this)
-      props.transition = props.transition || 'v-menu-transition'
-      return props
+        'v-overflow-btn--segmented': props.segmented,
+        'v-overflow-btn--editable': props.editable
+      }
+    ))
+
+    const isAnyValueAllowed = computed(() => {
+      if (props.editable) return true
+      return proxy ? VAutocomplete.options.computed.isAnyValueAllowed.call(proxy) : false
+    })
+
+    const isSingle = computed(() => true)
+
+    const computedItems = computed(() => {
+      if (!proxy) return []
+      return props.segmented ? proxy.allItems : proxy.filteredItems
+    })
+
+    const menuProps = computed(() => {
+      const propsValue = proxy ? { ...VAutocomplete.options.computed.$_menuProps.call(proxy) } : {}
+      propsValue.transition = propsValue.transition || 'v-menu-transition'
+      return propsValue
+    })
+
+    function genSelections () {
+      if (!proxy) return []
+      return props.editable
+        ? VAutocomplete.options.methods.genSelections.call(proxy)
+        : VSelect.options.methods.genSelections.call(proxy)
     }
-  },
 
-  methods: {
-    genSelections () {
-      return this.editable
-        ? VAutocomplete.options.methods.genSelections.call(this)
-        : VSelect.options.methods.genSelections.call(this) // Override v-autocomplete's override
-    },
-    genCommaSelection (item, index, last) {
-      return this.segmented
-        ? this.genSegmentedBtn(item)
-        : VSelect.options.methods.genCommaSelection.call(this, item, index, last)
-    },
-    genInput () {
-      const input = VTextField.options.methods.genInput.call(this)
+    function genCommaSelection (item, index, last) {
+      if (!proxy) return null
+      return props.segmented
+        ? genSegmentedBtn(item)
+        : VSelect.options.methods.genCommaSelection.call(proxy, item, index, last)
+    }
 
-      input.data.domProps.value = this.editable ? this.internalSearch : ''
-      input.data.attrs.readonly = !this.isAnyValueAllowed
+    function genInput () {
+      if (!proxy) return null
+      const input = VTextField.options.methods.genInput.call(proxy)
+
+      input.data.domProps.value = props.editable ? proxy.internalSearch : ''
+      input.data.attrs.readonly = !isAnyValueAllowed.value
 
       return input
-    },
-    genLabel () {
-      if (this.editable && this.isFocused) return null
+    }
 
-      const label = VTextField.options.methods.genLabel.call(this)
+    function genLabel () {
+      if (!proxy) return null
+      if (props.editable && proxy.isFocused) return null
 
+      const label = VTextField.options.methods.genLabel.call(proxy)
       if (!label) return label
 
-      // Reset previously set styles from parent
       label.data.style = {}
 
       return label
-    },
-    genSegmentedBtn (item) {
-      const itemValue = this.getValue(item)
-      const itemObj = this.computedItems.find(i => this.getValue(i) === itemValue) || item
+    }
+
+    function genSegmentedBtn (item) {
+      if (!proxy) return null
+      const items = computedItems.value || []
+      const itemValue = proxy.getValue(item)
+      const itemObj = items.find(i => proxy.getValue(i) === itemValue) || item
 
       if (!itemObj.text || !itemObj.callback) {
-        consoleWarn('When using \'segmented\' prop without a selection slot, items must contain both a text and callback property', this)
+        consoleWarn("When using 'segmented' prop without a selection slot, items must contain both a text and callback property", proxy)
         return null
       }
 
-      return this.$createElement(VBtn, {
+      return proxy.$createElement(VBtn, {
         props: { flat: true },
         on: {
           click (e) {
@@ -94,6 +110,19 @@ export default VAutocomplete.extend({
           }
         }
       }, [itemObj.text])
+    }
+
+    return {
+      classes,
+      isAnyValueAllowed,
+      isSingle,
+      computedItems,
+      $_menuProps: menuProps,
+      genSelections,
+      genCommaSelection,
+      genInput,
+      genLabel,
+      genSegmentedBtn
     }
   }
 })

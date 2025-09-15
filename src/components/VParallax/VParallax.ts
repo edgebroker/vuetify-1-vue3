@@ -1,22 +1,13 @@
 // Style
 import "@/css/vuetify.css"
 
-// Mixins
-import Translatable from '../../mixins/translatable'
+// Composables
+import useTranslatable from '../../composables/useTranslatable'
 
 // Types
-import Vue from 'vue'
-import { VNode, VNodeData } from 'vue/types/vnode'
-import mixins, { ExtractVue } from '../../util/mixins'
+import { defineComponent, h, ref, computed, watch, onMounted } from 'vue'
 
-interface options extends Vue {
-  $refs: {
-    img: HTMLImageElement
-  }
-}
-
-/* @vue/component */
-export default mixins<options & ExtractVue<typeof Translatable>>(Translatable).extend({
+export default defineComponent({
   name: 'v-parallax',
 
   props: {
@@ -31,78 +22,76 @@ export default mixins<options & ExtractVue<typeof Translatable>>(Translatable).e
     src: String
   },
 
-  data: () => ({
-    isBooted: false
-  }),
+  setup (props, { slots, attrs }) {
+    const img = ref<HTMLImageElement | null>(null)
+    const isBooted = ref(false)
 
-  computed: {
-    styles (): object {
-      return {
-        display: 'block',
-        opacity: this.isBooted ? 1 : 0,
-        transform: `translate(-50%, ${this.parallax}px)`
-      }
-    }
-  },
+    const { parallax, translate } = useTranslatable(props, {
+      objHeight: () => img.value ? img.value.naturalHeight : 0
+    })
 
-  watch: {
-    parallax () {
-      this.isBooted = true
-    }
-  },
+    watch(parallax, () => {
+      isBooted.value = true
+    })
 
-  mounted () {
-    this.init()
-  },
+    function init () {
+      const image = img.value
+      if (!image) return
 
-  methods: {
-    init () {
-      const img = this.$refs.img
-
-      if (!img) return
-
-      if (img.complete) {
-        this.translate()
-        this.listeners()
+      if (image.complete) {
+        translate()
       } else {
-        img.addEventListener('load', () => {
-          this.translate()
-          this.listeners()
-        }, false)
+        image.addEventListener('load', onLoad, { once: true })
       }
-    },
-    objHeight () {
-      return this.$refs.img.naturalHeight
-    }
-  },
-
-  render (h): VNode {
-    const imgData: VNodeData = {
-      staticClass: 'v-parallax__image',
-      style: this.styles,
-      attrs: {
-        src: this.src,
-        alt: this.alt
-      },
-      ref: 'img'
     }
 
-    const container = h('div', {
-      staticClass: 'v-parallax__image-container'
-    }, [
-      h('img', imgData)
-    ])
+    function onLoad () {
+      translate()
+    }
 
-    const content = h('div', {
-      staticClass: 'v-parallax__content'
-    }, this.$slots.default)
+    onMounted(() => {
+      init()
+    })
 
-    return h('div', {
-      staticClass: 'v-parallax',
-      style: {
-        height: `${this.height}px`
-      },
-      on: this.$listeners
-    }, [container, content])
+    const styles = computed(() => ({
+      display: 'block',
+      opacity: isBooted.value ? 1 : 0,
+      transform: `translate(-50%, ${parallax.value}px)`
+    }))
+
+    return () => {
+      const imgData = {
+        staticClass: 'v-parallax__image',
+        style: styles.value,
+        attrs: {
+          src: props.src,
+          alt: props.alt
+        },
+        ref: img
+      }
+
+      const container = h('div', {
+        staticClass: 'v-parallax__image-container'
+      }, [
+        h('img', imgData)
+      ])
+
+      const content = h('div', {
+        staticClass: 'v-parallax__content'
+      }, slots.default?.())
+
+      const { class: classAttr, style: styleAttr, ...restAttrs } = attrs as any
+      const mergedStyle = typeof styleAttr === 'object' ? styleAttr : {}
+
+      return h('div', {
+        staticClass: 'v-parallax',
+        class: classAttr,
+        style: {
+          height: `${props.height}px`,
+          ...mergedStyle
+        },
+        ...restAttrs
+      }, [container, content])
+    }
   }
 })

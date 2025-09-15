@@ -5,16 +5,16 @@ import VIcon from '../VIcon'
 // Directives
 import Resize from '../../directives/resize'
 
-// Mixins
-import mixins from '../../util/mixins'
-import Colorable from '../../mixins/colorable'
-import Themeable from '../../mixins/themeable'
+// Composables
+import useColorable, { colorProps } from '../../composables/useColorable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
+
+// Helpers
 
 // Types
-import { VNode, CreateElement } from 'vue'
+import { defineComponent, h, ref, computed, watch, nextTick, onMounted, getCurrentInstance } from 'vue'
 
-/* @vue/component */
-export default mixins(Colorable, Themeable).extend({
+export default defineComponent({
   name: 'v-pagination',
 
   directives: { Resize },
@@ -39,104 +39,97 @@ export default mixins(Colorable, Themeable).extend({
     value: {
       type: Number,
       default: 0
-    }
-  },
-
-  data () {
-    return {
-      maxButtons: 0,
-      selected: null as number | null
-    }
-  },
-
-  computed: {
-    classes (): object {
-      return {
-        'v-pagination': true,
-        'v-pagination--circle': this.circle,
-        'v-pagination--disabled': this.disabled,
-        ...this.themeClasses
-      }
     },
+    ...colorProps,
+    ...themeProps
+  },
 
-    items (): (string | number)[] {
-      const maxLength = parseInt(this.totalVisible, 10) || this.maxButtons
-      if (this.length <= maxLength) {
-        return this.range(1, this.length)
+  setup (props, { emit }) {
+    const pagination = ref<HTMLElement | null>(null)
+    const maxButtons = ref(0)
+    const selected = ref<number | null>(null)
+
+    const vm = getCurrentInstance()
+    const { setBackgroundColor } = useColorable(props)
+    const { themeClasses } = useThemeable(props)
+
+    const classes = computed(() => ({
+      'v-pagination': true,
+      'v-pagination--circle': props.circle,
+      'v-pagination--disabled': props.disabled,
+      ...themeClasses.value
+    }))
+
+    const items = computed<(string | number)[]>(() => {
+      const maxLength = parseInt(props.totalVisible as any, 10) || maxButtons.value
+      if (props.length <= maxLength) {
+        return range(1, props.length)
       }
 
       const even = maxLength % 2 === 0 ? 1 : 0
       const left = Math.floor(maxLength / 2)
-      const right = this.length - left + 1 + even
+      const right = props.length - left + 1 + even
 
-      if (this.value > left && this.value < right) {
-        const start = this.value - left + 2
-        const end = this.value + left - 2 - even
+      if (props.value > left && props.value < right) {
+        const start = props.value - left + 2
+        const end = props.value + left - 2 - even
 
-        return [1, '...', ...this.range(start, end), '...', this.length]
-      } else if (this.value === left) {
-        const end = this.value + left - 1 - even
-        return [...this.range(1, end), '...', this.length]
-      } else if (this.value === right) {
-        const start = this.value - left + 1
-        return [1, '...', ...this.range(start, this.length)]
-      } else {
-        return [
-          ...this.range(1, left),
-          '...',
-          ...this.range(right, this.length)
-        ]
+        return [1, '...', ...range(start, end), '...', props.length]
+      } else if (props.value === left) {
+        const end = props.value + left - 1 - even
+        return [...range(1, end), '...', props.length]
+      } else if (props.value === right) {
+        const start = props.value - left + 1
+        return [1, '...', ...range(start, props.length)]
       }
+
+      return [
+        ...range(1, left),
+        '...',
+        ...range(right, props.length)
+      ]
+    })
+
+    const isRtl = computed(() => vm?.proxy.$vuetify.rtl)
+
+    function init () {
+      selected.value = null
+      nextTick(onResize)
+      setTimeout(() => { selected.value = props.value }, 100)
     }
-  },
 
-  watch: {
-    value () {
-      this.init()
-    }
-  },
-
-  mounted () {
-    this.init()
-  },
-
-  methods: {
-    init () {
-      this.selected = null
-
-      this.$nextTick(this.onResize)
-      // TODO: Change this (f75dee3a, cbdf7caa)
-      setTimeout(() => (this.selected = this.value), 100)
-    },
-    onResize () {
-      const width = this.$el && this.$el.parentElement
-        ? this.$el.parentElement.clientWidth
+    function onResize () {
+      const parentWidth = pagination.value?.parentElement
+        ? pagination.value.parentElement.clientWidth
         : window.innerWidth
 
-      this.maxButtons = Math.floor((width - 96) / 42)
-    },
-    next (e: Event) {
-      e.preventDefault()
-      this.$emit('input', this.value + 1)
-      this.$emit('next')
-    },
-    previous (e: Event) {
-      e.preventDefault()
-      this.$emit('input', this.value - 1)
-      this.$emit('previous')
-    },
-    range (from: number, to: number) {
-      const range = []
+      maxButtons.value = Math.floor((parentWidth - 96) / 42)
+    }
 
-      from = from > 0 ? from : 1
+    function next (e: Event) {
+      e.preventDefault()
+      emit('input', props.value + 1)
+      emit('next')
+    }
 
-      for (let i = from; i <= to; i++) {
-        range.push(i)
+    function previous (e: Event) {
+      e.preventDefault()
+      emit('input', props.value - 1)
+      emit('previous')
+    }
+
+    function range (from: number, to: number) {
+      const list: number[] = []
+      let start = from > 0 ? from : 1
+
+      for (let i = start; i <= to; i++) {
+        list.push(i)
       }
 
-      return range
-    },
-    genIcon (h: CreateElement, icon: string, disabled: boolean, fn: EventListener): VNode {
+      return list
+    }
+
+    function genIcon (icon: string, disabled: boolean, fn: EventListener) {
       return h('li', [
         h('button', {
           staticClass: 'v-pagination__navigation',
@@ -149,45 +142,56 @@ export default mixins(Colorable, Themeable).extend({
           on: disabled ? {} : { click: fn }
         }, [h(VIcon, [icon])])
       ])
-    },
-    genItem (h: CreateElement, i: string | number): VNode {
-      const color: string | false = (i === this.value) && (this.color || 'primary')
-      return h('button', this.setBackgroundColor(color, {
+    }
+
+    function genItem (item: string | number) {
+      const color = item === props.value ? (props.color || 'primary') : false
+      return h('button', setBackgroundColor(color, {
         staticClass: 'v-pagination__item',
         class: {
-          'v-pagination__item--active': i === this.value
+          'v-pagination__item--active': item === props.value
         },
         attrs: {
           type: 'button'
         },
         on: {
-          click: () => this.$emit('input', i)
+          click: () => emit('input', item)
         }
-      }), [i.toString()])
-    },
-    genItems (h: CreateElement): VNode[] {
-      return this.items.map((i, index) => {
-        return h('li', { key: index }, [
-          isNaN(Number(i)) ? h('span', { class: 'v-pagination__more' }, [i.toString()]) : this.genItem(h, i)
-        ])
-      })
+      }), [item.toString()])
     }
-  },
 
-  render (h): VNode {
-    const children = [
-      this.genIcon(h, this.$vuetify.rtl ? this.nextIcon : this.prevIcon, this.value <= 1, this.previous),
-      this.genItems(h),
-      this.genIcon(h, this.$vuetify.rtl ? this.prevIcon : this.nextIcon, this.value >= this.length, this.next)
-    ]
+    function genItems () {
+      return items.value.map((item, index) => h('li', { key: index }, [
+        isNaN(Number(item))
+          ? h('span', { class: 'v-pagination__more' }, [item.toString()])
+          : genItem(item)
+      ]))
+    }
 
-    return h('ul', {
-      directives: [{
-        modifiers: { quiet: true },
-        name: 'resize',
-        value: this.onResize
-      }],
-      class: this.classes
-    }, children)
+    watch(() => props.value, () => {
+      init()
+    })
+
+    onMounted(() => {
+      init()
+    })
+
+    return () => {
+      const children = [
+        genIcon(isRtl.value ? props.nextIcon : props.prevIcon, props.value <= 1, previous),
+        ...genItems(),
+        genIcon(isRtl.value ? props.prevIcon : props.nextIcon, props.value >= props.length, next)
+      ]
+
+      return h('ul', {
+        directives: [{
+          modifiers: { quiet: true },
+          name: 'resize',
+          value: onResize
+        }],
+        class: classes.value,
+        ref: pagination
+      }, children)
+    }
   }
 })
