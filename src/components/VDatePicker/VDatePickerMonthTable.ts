@@ -1,31 +1,34 @@
-// Mixins
-import DatePickerTable from './mixins/date-picker-table'
-
 // Utils
 import { pad, createNativeLocaleFormatter } from './util'
-import mixins from '../../util/mixins'
+
+// Composables
+import useDatePickerTable, { datePickerTableProps } from '../../composables/useDatePickerTable'
 
 // Types
-import { VNode } from 'vue'
-import { DatePickerFormatter } from './util/createNativeLocaleFormatter'
+import { computed, defineComponent, h } from 'vue'
+import type { DatePickerFormatter } from './util/createNativeLocaleFormatter'
 
-export default mixins(
-  DatePickerTable
-/* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-date-picker-month-table',
 
-  computed: {
-    formatter (): DatePickerFormatter {
-      return this.format || createNativeLocaleFormatter(this.locale, { month: 'short', timeZone: 'UTC' }, { start: 5, length: 2 })
-    }
+  props: {
+    ...datePickerTableProps,
   },
 
-  methods: {
-    calculateTableDate (delta: number) {
-      return `${parseInt(this.tableDate, 10) + Math.sign(delta || 1)}`
-    },
-    genTBody () {
+  emits: ['input', 'tableDate', 'click:month', 'dblclick:month'],
+
+  setup (props, { emit }) {
+    const { displayedYear, genButton, genTable } = useDatePickerTable(props, emit)
+
+    const formatter = computed<DatePickerFormatter>(() =>
+      props.format || createNativeLocaleFormatter(props.locale, { month: 'short', timeZone: 'UTC' }, { start: 5, length: 2 })
+    )
+
+    function calculateTableDate (delta: number) {
+      return `${parseInt(props.tableDate, 10) + Math.sign(delta || 1)}`
+    }
+
+    function genTBody () {
       const children = []
       const cols = Array(3).fill(null)
       const rows = 12 / cols.length
@@ -33,26 +36,22 @@ export default mixins(
       for (let row = 0; row < rows; row++) {
         const tds = cols.map((_, col) => {
           const month = row * cols.length + col
-          const date = `${this.displayedYear}-${pad(month + 1)}`
-          return this.$createElement('td', {
-            key: month
-          }, [
-            this.genButton(date, false, 'month', this.formatter)
+          const date = `${displayedYear.value}-${pad(month + 1)}`
+          return h('td', { key: month }, [
+            genButton(date, false, 'month', formatter.value),
           ])
         })
 
-        children.push(this.$createElement('tr', {
-          key: row
-        }, tds))
+        children.push(h('tr', { key: row }, tds))
       }
 
-      return this.$createElement('tbody', children)
+      return h('tbody', children)
     }
-  },
 
-  render (): VNode {
-    return this.genTable('v-date-picker-table v-date-picker-table--month', [
-      this.genTBody()
-    ], this.calculateTableDate)
-  }
+    return () => genTable(
+      'v-date-picker-table v-date-picker-table--month',
+      [genTBody()],
+      calculateTableDate
+    )
+  },
 })

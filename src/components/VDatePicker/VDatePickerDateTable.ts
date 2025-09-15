@@ -1,124 +1,130 @@
-// Mixins
-import DatePickerTable from './mixins/date-picker-table'
-
 // Utils
 import { pad, createNativeLocaleFormatter, monthChange } from './util'
 import { createRange } from '../../util/helpers'
-import mixins from '../../util/mixins'
+
+// Composables
+import useDatePickerTable, { datePickerTableProps } from '../../composables/useDatePickerTable'
 
 // Types
-import { DatePickerFormatter } from './util/createNativeLocaleFormatter'
-import { PropValidator } from 'vue/types/options'
-import { VNode, VNodeChildren } from 'vue'
+import { computed, defineComponent, h, PropType } from 'vue'
+import type { VNode } from 'vue'
+import type { DatePickerFormatter } from './util/createNativeLocaleFormatter'
 
-export default mixins(
-  DatePickerTable
-/* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-date-picker-date-table',
 
   props: {
+    ...datePickerTableProps,
     firstDayOfWeek: {
       type: [String, Number],
-      default: 0
+      default: 0,
     },
     showWeek: Boolean,
-    weekdayFormat: Function as PropValidator<DatePickerFormatter | undefined>
+    weekdayFormat: Function as PropType<DatePickerFormatter | undefined>,
   },
 
-  computed: {
-    formatter (): DatePickerFormatter {
-      return this.format || createNativeLocaleFormatter(this.locale, { day: 'numeric', timeZone: 'UTC' }, { start: 8, length: 2 })
-    },
-    weekdayFormatter (): DatePickerFormatter | undefined {
-      return this.weekdayFormat || createNativeLocaleFormatter(this.locale, { weekday: 'narrow', timeZone: 'UTC' })
-    },
-    weekDays (): string[] {
-      const first = parseInt(this.firstDayOfWeek, 10)
+  emits: ['input', 'tableDate', 'click:date', 'dblclick:date'],
 
-      return this.weekdayFormatter
-        ? createRange(7).map(i => this.weekdayFormatter!(`2017-01-${first + i + 15}`)) // 2017-01-15 is Sunday
+  setup (props, { emit }) {
+    const {
+      displayedMonth,
+      displayedYear,
+      genButton,
+      genTable,
+    } = useDatePickerTable(props, emit)
+
+    const formatter = computed<DatePickerFormatter>(() =>
+      props.format || createNativeLocaleFormatter(props.locale, { day: 'numeric', timeZone: 'UTC' }, { start: 8, length: 2 })
+    )
+
+    const weekdayFormatter = computed<DatePickerFormatter | undefined>(() =>
+      props.weekdayFormat || createNativeLocaleFormatter(props.locale, { weekday: 'narrow', timeZone: 'UTC' })
+    )
+
+    const weekDays = computed(() => {
+      const first = parseInt(String(props.firstDayOfWeek), 10)
+
+      return weekdayFormatter.value
+        ? createRange(7).map(i => weekdayFormatter.value!(`2017-01-${first + i + 15}`))
         : createRange(7).map(i => ['S', 'M', 'T', 'W', 'T', 'F', 'S'][(i + first) % 7])
-    }
-  },
+    })
 
-  methods: {
-    calculateTableDate (delta: number) {
-      return monthChange(this.tableDate, Math.sign(delta || 1))
-    },
-    genTHead () {
-      const days = this.weekDays.map(day => this.$createElement('th', day))
-      this.showWeek && days.unshift(this.$createElement('th'))
-      return this.$createElement('thead', this.genTR(days))
-    },
-    // Returns number of the days from the firstDayOfWeek to the first day of the current month
-    weekDaysBeforeFirstDayOfTheMonth () {
-      const firstDayOfTheMonth = new Date(`${this.displayedYear}-${pad(this.displayedMonth + 1)}-01T00:00:00+00:00`)
+    function calculateTableDate (delta: number) {
+      return monthChange(props.tableDate, Math.sign(delta || 1))
+    }
+
+    function genTHead () {
+      const days = weekDays.value.map(day => h('th', day))
+      if (props.showWeek) days.unshift(h('th'))
+      return h('thead', [h('tr', days)])
+    }
+
+    function weekDaysBeforeFirstDayOfTheMonth () {
+      const firstDayOfTheMonth = new Date(`${displayedYear.value}-${pad(displayedMonth.value + 1)}-01T00:00:00+00:00`)
       const weekDay = firstDayOfTheMonth.getUTCDay()
-      return (weekDay - parseInt(this.firstDayOfWeek) + 7) % 7
-    },
-    getWeekNumber () {
-      let dayOfYear = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334][this.displayedMonth]
-      if (this.displayedMonth > 1 &&
-        (((this.displayedYear % 4 === 0) && (this.displayedYear % 100 !== 0)) || (this.displayedYear % 400 === 0))
+      return (weekDay - parseInt(String(props.firstDayOfWeek)) + 7) % 7
+    }
+
+    function getWeekNumber () {
+      let dayOfYear = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334][displayedMonth.value]
+      if (displayedMonth.value > 1 &&
+        (((displayedYear.value % 4 === 0) && (displayedYear.value % 100 !== 0)) || (displayedYear.value % 400 === 0))
       ) {
         dayOfYear++
       }
       const offset = (
-        this.displayedYear +
-        ((this.displayedYear - 1) >> 2) -
-        Math.floor((this.displayedYear - 1) / 100) +
-        Math.floor((this.displayedYear - 1) / 400) -
-        Number(this.firstDayOfWeek)
-      ) % 7 // https://en.wikipedia.org/wiki/Zeller%27s_congruence
+        displayedYear.value +
+        ((displayedYear.value - 1) >> 2) -
+        Math.floor((displayedYear.value - 1) / 100) +
+        Math.floor((displayedYear.value - 1) / 400) -
+        Number(props.firstDayOfWeek)
+      ) % 7
       return Math.floor((dayOfYear + offset) / 7) + 1
-    },
-    genWeekNumber (weekNumber: number) {
-      return this.$createElement('td', [
-        this.$createElement('small', {
-          staticClass: 'v-date-picker-table--date__week'
-        }, String(weekNumber).padStart(2, '0'))
+    }
+
+    function genWeekNumber (weekNumber: number) {
+      return h('td', [
+        h('small', {
+          class: 'v-date-picker-table--date__week',
+        }, String(weekNumber).padStart(2, '0')),
       ])
-    },
-    genTBody () {
-      const children = []
-      const daysInMonth = new Date(this.displayedYear, this.displayedMonth + 1, 0).getDate()
-      let rows = []
-      let day = this.weekDaysBeforeFirstDayOfTheMonth()
-      let weekNumber = this.getWeekNumber()
+    }
 
-      this.showWeek && rows.push(this.genWeekNumber(weekNumber++))
+    function genTBody () {
+      const children: VNode[] = []
+      const daysInMonth = new Date(displayedYear.value, displayedMonth.value + 1, 0).getDate()
+      let rows: VNode[] = []
+      let day = weekDaysBeforeFirstDayOfTheMonth()
+      let weekNumber = getWeekNumber()
 
-      while (day--) rows.push(this.$createElement('td'))
+      if (props.showWeek) rows.push(genWeekNumber(weekNumber++))
+
+      while (day--) rows.push(h('td'))
       for (day = 1; day <= daysInMonth; day++) {
-        const date = `${this.displayedYear}-${pad(this.displayedMonth + 1)}-${pad(day)}`
+        const date = `${displayedYear.value}-${pad(displayedMonth.value + 1)}-${pad(day)}`
 
-        rows.push(this.$createElement('td', [
-          this.genButton(date, true, 'date', this.formatter)
+        rows.push(h('td', [
+          genButton(date, true, 'date', formatter.value),
         ]))
 
-        if (rows.length % (this.showWeek ? 8 : 7) === 0) {
-          children.push(this.genTR(rows))
+        if (rows.length % (props.showWeek ? 8 : 7) === 0) {
+          children.push(h('tr', rows))
           rows = []
-          day < daysInMonth && this.showWeek && rows.push(this.genWeekNumber(weekNumber++))
+          if (day < daysInMonth && props.showWeek) rows.push(genWeekNumber(weekNumber++))
         }
       }
 
       if (rows.length) {
-        children.push(this.genTR(rows))
+        children.push(h('tr', rows))
       }
 
-      return this.$createElement('tbody', children)
-    },
-    genTR (children: VNodeChildren) {
-      return [this.$createElement('tr', children)]
+      return h('tbody', children)
     }
-  },
 
-  render (): VNode {
-    return this.genTable('v-date-picker-table v-date-picker-table--date', [
-      this.genTHead(),
-      this.genTBody()
-    ], this.calculateTableDate)
-  }
+    return () => genTable(
+      'v-date-picker-table v-date-picker-table--date',
+      [genTHead(), genTBody()],
+      calculateTableDate
+    )
+  },
 })

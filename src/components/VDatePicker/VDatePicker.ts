@@ -4,21 +4,23 @@ import VDatePickerHeader from './VDatePickerHeader'
 import VDatePickerDateTable from './VDatePickerDateTable'
 import VDatePickerMonthTable from './VDatePickerMonthTable'
 import VDatePickerYears from './VDatePickerYears'
+import VPicker from '../VPicker'
 
-// Mixins
-import Picker from '../../mixins/picker'
+// Composables
+import usePicker, { pickerProps } from '../../composables/usePicker'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
+import { colorProps } from '../../composables/useColorable'
 
 // Utils
 import { pad, createNativeLocaleFormatter } from './util'
 import isDateAllowed, { AllowedDateFunction } from './util/isDateAllowed'
 import { consoleWarn } from '../../util/console'
 import { daysInMonth } from '../VCalendar/util/timestamp'
-import mixins from '../../util/mixins'
 
 // Types
-import { PropValidator } from 'vue/types/options'
-import { DatePickerFormatter } from './util/createNativeLocaleFormatter'
-import { VNode } from 'vue'
+import { defineComponent, computed, getCurrentInstance, h, PropType, ref, watch } from 'vue'
+import type { DatePickerFormatter } from './util/createNativeLocaleFormatter'
+import type { VNode } from 'vue'
 
 export type DateEventColorValue = string | string[]
 export type DateEvents = string[] | ((date: string) => boolean | DateEventColorValue) | Record<string, DateEventColorValue>
@@ -38,420 +40,471 @@ function sanitizeDateString (dateString: string, type: 'date' | 'month' | 'year'
   return `${year}-${pad(month)}-${pad(date)}`.substr(0, { date: 10, month: 7, year: 4 }[type])
 }
 
-export default mixins(
-  Picker
-/* @vue/component */
-).extend({
+function getLastArrayValue (value: DatePickerValue, multiple: boolean): string | null {
+  if (!multiple) {
+    return typeof value === 'string' ? value : null
+  }
+
+  if (Array.isArray(value) && value.length) {
+    return value[value.length - 1]
+  }
+
+  return null
+}
+
+export default defineComponent({
   name: 'v-date-picker',
 
   props: {
-    allowedDates: Function as PropValidator<AllowedDateFunction | undefined>,
+    ...pickerProps,
+    ...themeProps,
+    ...colorProps,
+    allowedDates: Function as PropType<AllowedDateFunction | undefined>,
     // Function formatting the day in date picker table
-    dayFormat: Function as PropValidator<AllowedDateFunction | undefined>,
+    dayFormat: Function as PropType<AllowedDateFunction | undefined>,
     disabled: Boolean,
     events: {
-      type: [Array, Function, Object],
-      default: () => null
-    } as any as PropValidator<DateEvents>,
+      type: [Array, Function, Object] as PropType<DateEvents>,
+      default: () => null,
+    },
     eventColor: {
-      type: [Array, Function, Object, String],
-      default: () => 'warning'
-    } as any as PropValidator<DateEventColors>,
+      type: [Array, Function, Object, String] as PropType<DateEventColors>,
+      default: () => 'warning',
+    },
     firstDayOfWeek: {
       type: [String, Number],
-      default: 0
+      default: 0,
     },
     // Function formatting the tableDate in the day/month table header
-    headerDateFormat: Function as PropValidator<DatePickerFormatter | undefined>,
+    headerDateFormat: Function as PropType<DatePickerFormatter | undefined>,
     locale: {
       type: String,
-      default: 'en-us'
+      default: 'en-us',
     },
     max: String,
     min: String,
     // Function formatting month in the months table
-    monthFormat: Function as PropValidator<DatePickerFormatter | undefined>,
+    monthFormat: Function as PropType<DatePickerFormatter | undefined>,
     multiple: Boolean,
     nextIcon: {
       type: String,
-      default: '$vuetify.icons.next'
+      default: '$vuetify.icons.next',
     },
     pickerDate: String,
     prevIcon: {
       type: String,
-      default: '$vuetify.icons.prev'
+      default: '$vuetify.icons.prev',
     },
     reactive: Boolean,
     readonly: Boolean,
     scrollable: Boolean,
     showCurrent: {
       type: [Boolean, String],
-      default: true
+      default: true,
     },
     showWeek: Boolean,
     // Function formatting currently selected date in the picker title
-    titleDateFormat: Function as PropValidator<DatePickerFormatter | DatePickerMultipleFormatter | undefined>,
+    titleDateFormat: Function as PropType<DatePickerFormatter | DatePickerMultipleFormatter | undefined>,
     type: {
-      type: String,
+      type: String as PropType<DatePickerType>,
       default: 'date',
-      validator: (type: any) => ['date', 'month'].includes(type) // TODO: year
-    } as any as PropValidator<DatePickerType>,
-    value: [Array, String] as PropValidator<DatePickerValue>,
-    weekdayFormat: Function as PropValidator<DatePickerFormatter | undefined>,
+      validator: (type: any) => ['date', 'month'].includes(type),
+    },
+    value: [Array, String] as PropType<DatePickerValue>,
+    weekdayFormat: Function as PropType<DatePickerFormatter | undefined>,
     // Function formatting the year in table header and pickup title
-    yearFormat: Function as PropValidator<DatePickerFormatter | undefined>,
-    yearIcon: String
+    yearFormat: Function as PropType<DatePickerFormatter | undefined>,
+    yearIcon: String,
   },
 
-  data () {
+  emits: [
+    'change',
+    'click:date',
+    'click:month',
+    'dblclick:date',
+    'dblclick:month',
+    'input',
+    'update:pickerDate',
+  ],
+
+  setup (props, { emit, slots }) {
     const now = new Date()
-    return {
-      activePicker: this.type.toUpperCase(),
-      inputDay: null as number | null,
-      inputMonth: null as number | null,
-      inputYear: null as number | null,
-      isReversing: false,
-      now,
-      // tableDate is a string in 'YYYY' / 'YYYY-M' format (leading zero for month is not required)
-      tableDate: (() => {
-        if (this.pickerDate) {
-          return this.pickerDate
-        }
+    const vm = getCurrentInstance()
 
-        const date = (this.multiple ? (this.value as string[])[(this.value as string[]).length - 1] : this.value) ||
-          `${now.getFullYear()}-${now.getMonth() + 1}`
-        return sanitizeDateString(date as string, this.type === 'date' ? 'month' : 'year')
-      })()
-    }
-  },
+    const activePicker = ref(props.type.toUpperCase() as 'DATE' | 'MONTH' | 'YEAR')
+    const inputDay = ref<number | null>(null)
+    const inputMonth = ref<number | null>(null)
+    const inputYear = ref<number | null>(null)
+    const isReversing = ref(false)
 
-  computed: {
-    lastValue (): string | null {
-      return this.multiple ? (this.value as string[])[(this.value as string[]).length - 1] : (this.value as string | null)
-    },
-    selectedMonths (): string | string[] | undefined {
-      if (!this.value || !this.value.length || this.type === 'month') {
-        return this.value
-      } else if (this.multiple) {
-        return (this.value as string[]).map(val => val.substr(0, 7))
-      } else {
-        return (this.value as string).substr(0, 7)
-      }
-    },
-    current (): string | null {
-      if (this.showCurrent === true) {
-        return sanitizeDateString(`${this.now.getFullYear()}-${this.now.getMonth() + 1}-${this.now.getDate()}`, this.type)
+    const initialLastValue = getLastArrayValue(props.value, props.multiple)
+    const initialTableDate = props.pickerDate || sanitizeDateString(
+      (initialLastValue || `${now.getFullYear()}-${now.getMonth() + 1}`),
+      props.type === 'date' ? 'month' : 'year'
+    )
+    const tableDate = ref(initialTableDate)
+
+    const { themeClasses } = useThemeable(props)
+    const { genPickerActionsSlot } = usePicker(props, { slots })
+
+    const lastValue = computed(() => getLastArrayValue(props.value, props.multiple))
+
+    const selectedMonths = computed(() => {
+      if (!props.value || (Array.isArray(props.value) && !props.value.length) || props.type === 'month') {
+        return props.value
+      } else if (props.multiple && Array.isArray(props.value)) {
+        return props.value.map(val => val.substr(0, 7))
+      } else if (typeof props.value === 'string') {
+        return props.value.substr(0, 7)
       }
 
-      return this.showCurrent || null
-    },
-    inputDate (): string {
-      return this.type === 'date'
-        ? `${this.inputYear}-${pad(this.inputMonth! + 1)}-${pad(this.inputDay!)}`
-        : `${this.inputYear}-${pad(this.inputMonth! + 1)}`
-    },
-    tableMonth (): number {
-      return Number((this.pickerDate || this.tableDate).split('-')[1]) - 1
-    },
-    tableYear (): number {
-      return Number((this.pickerDate || this.tableDate).split('-')[0])
-    },
-    minMonth (): string | null {
-      return this.min ? sanitizeDateString(this.min, 'month') : null
-    },
-    maxMonth (): string | null {
-      return this.max ? sanitizeDateString(this.max, 'month') : null
-    },
-    minYear (): string | null {
-      return this.min ? sanitizeDateString(this.min, 'year') : null
-    },
-    maxYear (): string | null {
-      return this.max ? sanitizeDateString(this.max, 'year') : null
-    },
-    formatters (): Formatters {
-      return {
-        year: this.yearFormat || createNativeLocaleFormatter(this.locale, { year: 'numeric', timeZone: 'UTC' }, { length: 4 }),
-        titleDate: this.titleDateFormat || (this.multiple ? this.defaultTitleMultipleDateFormatter : this.defaultTitleDateFormatter)
-      }
-    },
-    defaultTitleMultipleDateFormatter (): DatePickerMultipleFormatter {
-      if ((this.value as string[]).length < 2) {
-        return dates => dates.length ? this.defaultTitleDateFormatter(dates[0]) : '0 selected'
+      return undefined
+    })
+
+    const current = computed(() => {
+      if (props.showCurrent === true) {
+        return sanitizeDateString(`${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`, props.type)
       }
 
-      return dates => `${dates.length} selected`
-    },
-    defaultTitleDateFormatter (): DatePickerFormatter {
+      return props.showCurrent || null
+    })
+
+    const inputDate = computed(() => {
+      const year = inputYear.value ?? now.getFullYear()
+      const month = (inputMonth.value ?? 0) + 1
+
+      if (props.type === 'date') {
+        const day = inputDay.value ?? now.getDate()
+        return `${year}-${pad(month)}-${pad(day)}`
+      }
+
+      return `${year}-${pad(month)}`
+    })
+
+    const tableMonth = computed(() => {
+      const [, month] = (props.pickerDate || tableDate.value).split('-')
+      return month ? Number(month) - 1 : 0
+    })
+
+    const tableYear = computed(() => Number((props.pickerDate || tableDate.value).split('-')[0]))
+
+    const minMonth = computed(() => props.min ? sanitizeDateString(props.min, 'month') : null)
+    const maxMonth = computed(() => props.max ? sanitizeDateString(props.max, 'month') : null)
+    const minYear = computed(() => props.min ? sanitizeDateString(props.min, 'year') : null)
+    const maxYear = computed(() => props.max ? sanitizeDateString(props.max, 'year') : null)
+
+    const defaultTitleDateFormatter = computed<DatePickerFormatter>(() => {
       const titleFormats = {
         year: { year: 'numeric', timeZone: 'UTC' },
         month: { month: 'long', timeZone: 'UTC' },
-        date: { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }
+        date: { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' },
       }
 
-      const titleDateFormatter = createNativeLocaleFormatter(this.locale, titleFormats[this.type], {
+      const titleDateFormatter = createNativeLocaleFormatter(props.locale, titleFormats[props.type], {
         start: 0,
-        length: { date: 10, month: 7, year: 4 }[this.type]
+        length: { date: 10, month: 7, year: 4 }[props.type],
       })
 
       const landscapeFormatter = (date: string) => titleDateFormatter(date)
         .replace(/([^\d\s])([\d])/g, (match, nonDigit, digit) => `${nonDigit} ${digit}`)
         .replace(', ', ',<br>')
 
-      return this.landscape ? landscapeFormatter : titleDateFormatter
-    }
-  },
+      return props.landscape ? landscapeFormatter : titleDateFormatter
+    })
 
-  watch: {
-    tableDate (val: string, prev: string) {
-      // Make a ISO 8601 strings from val and prev for comparision, otherwise it will incorrectly
-      // compare for example '2000-9' and '2000-10'
-      const sanitizeType = this.type === 'month' ? 'year' : 'month'
-      this.isReversing = sanitizeDateString(val, sanitizeType) < sanitizeDateString(prev, sanitizeType)
-      this.$emit('update:pickerDate', val)
-    },
-    pickerDate (val: string | null) {
-      if (val) {
-        this.tableDate = val
-      } else if (this.lastValue && this.type === 'date') {
-        this.tableDate = sanitizeDateString(this.lastValue, 'month')
-      } else if (this.lastValue && this.type === 'month') {
-        this.tableDate = sanitizeDateString(this.lastValue, 'year')
+    const defaultTitleMultipleDateFormatter = computed<DatePickerMultipleFormatter>(() => {
+      if (!Array.isArray(props.value) || props.value.length < 2) {
+        return dates => dates.length ? defaultTitleDateFormatter.value(dates[0]) : '0 selected'
       }
-    },
-    value (newValue: DatePickerValue, oldValue: DatePickerValue) {
-      this.checkMultipleProp()
-      this.setInputDate()
 
-      if (!this.multiple && this.value && !this.pickerDate) {
-        this.tableDate = sanitizeDateString(this.inputDate, this.type === 'month' ? 'year' : 'month')
-      } else if (this.multiple && (this.value as string[]).length && !(oldValue as string[]).length && !this.pickerDate) {
-        this.tableDate = sanitizeDateString(this.inputDate, this.type === 'month' ? 'year' : 'month')
-      }
-    },
-    type (type: DatePickerType) {
-      this.activePicker = type.toUpperCase()
+      return dates => `${dates.length} selected`
+    })
 
-      if (this.value && this.value.length) {
-        const output = (this.multiple ? (this.value as string[]) : [this.value as string])
-          .map((val: string) => sanitizeDateString(val, type))
-          .filter(this.isDateAllowed)
-        this.$emit('input', this.multiple ? output : output[0])
+    const formatters = computed<Formatters>(() => ({
+      year: props.yearFormat || createNativeLocaleFormatter(props.locale, { year: 'numeric', timeZone: 'UTC' }, { length: 4 }),
+      titleDate: props.titleDateFormat || (props.multiple ? defaultTitleMultipleDateFormatter.value : defaultTitleDateFormatter.value),
+    }))
+
+    function checkMultipleProp () {
+      if (props.value == null) return
+      const valueType = (props.value as any).constructor?.name
+      const expected = props.multiple ? 'Array' : 'String'
+      if (valueType !== expected) {
+        consoleWarn(`Value must be ${props.multiple ? 'an' : 'a'} ${expected}, got ${valueType}`, vm?.proxy)
       }
     }
-  },
 
-  created () {
-    this.checkMultipleProp()
-
-    if (this.pickerDate !== this.tableDate) {
-      this.$emit('update:pickerDate', this.tableDate)
+    function isDateAllowedFn (value: string) {
+      return isDateAllowed(value, props.min, props.max, props.allowedDates)
     }
-    this.setInputDate()
-  },
 
-  methods: {
-    emitInput (newInput: string) {
-      const output = this.multiple
-        ? (
-          (this.value as string[]).indexOf(newInput) === -1
-            ? (this.value as string[]).concat([newInput])
-            : (this.value as string[]).filter(x => x !== newInput)
-        )
+    function emitInput (newInput: string) {
+      const output = props.multiple
+        ? (() => {
+            const valueArray = Array.isArray(props.value) ? props.value.slice() : []
+            const index = valueArray.indexOf(newInput)
+            if (index === -1) {
+              valueArray.push(newInput)
+            } else {
+              valueArray.splice(index, 1)
+            }
+            return valueArray
+          })()
         : newInput
 
-      this.$emit('input', output)
-      this.multiple || this.$emit('change', newInput)
-    },
-    checkMultipleProp () {
-      if (this.value == null) return
-      const valueType = this.value.constructor.name
-      const expected = this.multiple ? 'Array' : 'String'
-      if (valueType !== expected) {
-        consoleWarn(`Value must be ${this.multiple ? 'an' : 'a'} ${expected}, got ${valueType}`, this)
-      }
-    },
-    isDateAllowed (value: string) {
-      return isDateAllowed(value, this.min, this.max, this.allowedDates)
-    },
-    yearClick (value: number) {
-      this.inputYear = value
-      if (this.type === 'month') {
-        this.tableDate = `${value}`
-      } else {
-        this.tableDate = `${value}-${pad((this.tableMonth || 0) + 1)}`
-      }
-      this.activePicker = 'MONTH'
-      if (this.reactive && !this.readonly && !this.multiple && this.isDateAllowed(this.inputDate)) {
-        this.$emit('input', this.inputDate)
-      }
-    },
-    monthClick (value: string) {
-      this.inputYear = parseInt(value.split('-')[0], 10)
-      this.inputMonth = parseInt(value.split('-')[1], 10) - 1
-      if (this.type === 'date') {
-        if (this.inputDay) {
-          this.inputDay = Math.min(this.inputDay, daysInMonth(this.inputYear, this.inputMonth + 1))
-        }
+      emit('input', output)
+      if (!props.multiple) emit('change', newInput)
+    }
 
-        this.tableDate = value
-        this.activePicker = 'DATE'
-        if (this.reactive && !this.readonly && !this.multiple && this.isDateAllowed(this.inputDate)) {
-          this.$emit('input', this.inputDate)
-        }
+    function yearClick (value: number) {
+      inputYear.value = value
+      if (props.type === 'month') {
+        tableDate.value = `${value}`
       } else {
-        this.emitInput(this.inputDate)
+        tableDate.value = `${value}-${pad((tableMonth.value || 0) + 1)}`
       }
-    },
-    dateClick (value: string) {
-      this.inputYear = parseInt(value.split('-')[0], 10)
-      this.inputMonth = parseInt(value.split('-')[1], 10) - 1
-      this.inputDay = parseInt(value.split('-')[2], 10)
-      this.emitInput(this.inputDate)
-    },
-    genPickerTitle () {
-      return this.$createElement(VDatePickerTitle, {
-        props: {
-          date: this.value ? (this.formatters.titleDate as (value: any) => string)(this.value) : '',
-          disabled: this.disabled,
-          readonly: this.readonly,
-          selectingYear: this.activePicker === 'YEAR',
-          year: this.formatters.year(this.value ? `${this.inputYear}` : this.tableDate),
-          yearIcon: this.yearIcon,
-          value: this.multiple ? (this.value as string[])[0] : this.value
-        },
-        slot: 'title',
-        on: {
-          'update:selectingYear': (value: boolean) => this.activePicker = value ? 'YEAR' : this.type.toUpperCase()
-        }
-      })
-    },
-    genTableHeader () {
-      return this.$createElement(VDatePickerHeader, {
-        props: {
-          nextIcon: this.nextIcon,
-          color: this.color,
-          dark: this.dark,
-          disabled: this.disabled,
-          format: this.headerDateFormat,
-          light: this.light,
-          locale: this.locale,
-          min: this.activePicker === 'DATE' ? this.minMonth : this.minYear,
-          max: this.activePicker === 'DATE' ? this.maxMonth : this.maxYear,
-          prevIcon: this.prevIcon,
-          readonly: this.readonly,
-          value: this.activePicker === 'DATE' ? `${pad(this.tableYear, 4)}-${pad(this.tableMonth + 1)}` : `${pad(this.tableYear, 4)}`
-        },
-        on: {
-          toggle: () => this.activePicker = (this.activePicker === 'DATE' ? 'MONTH' : 'YEAR'),
-          input: (value: string) => this.tableDate = value
-        }
-      })
-    },
-    genDateTable () {
-      return this.$createElement(VDatePickerDateTable, {
-        props: {
-          allowedDates: this.allowedDates,
-          color: this.color,
-          current: this.current,
-          dark: this.dark,
-          disabled: this.disabled,
-          events: this.events,
-          eventColor: this.eventColor,
-          firstDayOfWeek: this.firstDayOfWeek,
-          format: this.dayFormat,
-          light: this.light,
-          locale: this.locale,
-          min: this.min,
-          max: this.max,
-          readonly: this.readonly,
-          scrollable: this.scrollable,
-          showWeek: this.showWeek,
-          tableDate: `${pad(this.tableYear, 4)}-${pad(this.tableMonth + 1)}`,
-          value: this.value,
-          weekdayFormat: this.weekdayFormat
-        },
-        ref: 'table',
-        on: {
-          input: this.dateClick,
-          tableDate: (value: string) => this.tableDate = value,
-          'click:date': (value: string) => this.$emit('click:date', value),
-          'dblclick:date': (value: string) => this.$emit('dblclick:date', value)
-        }
-      })
-    },
-    genMonthTable () {
-      return this.$createElement(VDatePickerMonthTable, {
-        props: {
-          allowedDates: this.type === 'month' ? this.allowedDates : null,
-          color: this.color,
-          current: this.current ? sanitizeDateString(this.current, 'month') : null,
-          dark: this.dark,
-          disabled: this.disabled,
-          events: this.type === 'month' ? this.events : null,
-          eventColor: this.type === 'month' ? this.eventColor : null,
-          format: this.monthFormat,
-          light: this.light,
-          locale: this.locale,
-          min: this.minMonth,
-          max: this.maxMonth,
-          readonly: this.readonly && this.type === 'month',
-          scrollable: this.scrollable,
-          value: this.selectedMonths,
-          tableDate: `${pad(this.tableYear, 4)}`
-        },
-        ref: 'table',
-        on: {
-          input: this.monthClick,
-          tableDate: (value: string) => this.tableDate = value,
-          'click:month': (value: string) => this.$emit('click:month', value),
-          'dblclick:month': (value: string) => this.$emit('dblclick:month', value)
-        }
-      })
-    },
-    genYears () {
-      return this.$createElement(VDatePickerYears, {
-        props: {
-          color: this.color,
-          format: this.yearFormat,
-          locale: this.locale,
-          min: this.minYear,
-          max: this.maxYear,
-          value: this.tableYear
-        },
-        on: {
-          input: this.yearClick
-        }
-      })
-    },
-    genPickerBody () {
-      const children = this.activePicker === 'YEAR' ? [
-        this.genYears()
-      ] : [
-        this.genTableHeader(),
-        this.activePicker === 'DATE' ? this.genDateTable() : this.genMonthTable()
-      ]
-
-      return this.$createElement('div', {
-        key: this.activePicker
-      }, children)
-    },
-    setInputDate () {
-      if (this.lastValue) {
-        const array = this.lastValue.split('-')
-        this.inputYear = parseInt(array[0], 10)
-        this.inputMonth = parseInt(array[1], 10) - 1
-        if (this.type === 'date') {
-          this.inputDay = parseInt(array[2], 10)
-        }
-      } else {
-        this.inputYear = this.inputYear || this.now.getFullYear()
-        this.inputMonth = this.inputMonth == null ? this.inputMonth : this.now.getMonth()
-        this.inputDay = this.inputDay || this.now.getDate()
+      activePicker.value = 'MONTH'
+      if (props.reactive && !props.readonly && !props.multiple && isDateAllowedFn(inputDate.value)) {
+        emit('input', inputDate.value)
       }
     }
-  },
 
-  render (): VNode {
-    return this.genPicker('v-picker--date')
-  }
+    function monthClick (value: string) {
+      const [year, month] = value.split('-').map(Number)
+      inputYear.value = year
+      inputMonth.value = month - 1
+      if (props.type === 'date') {
+        if (inputDay.value != null) {
+          inputDay.value = Math.min(inputDay.value, daysInMonth(inputYear.value!, (inputMonth.value ?? 0) + 1))
+        }
+
+        tableDate.value = value
+        activePicker.value = 'DATE'
+        if (props.reactive && !props.readonly && !props.multiple && isDateAllowedFn(inputDate.value)) {
+          emit('input', inputDate.value)
+        }
+      } else {
+        emitInput(inputDate.value)
+      }
+    }
+
+    function dateClick (value: string) {
+      const [year, month, day] = value.split('-').map(Number)
+      inputYear.value = year
+      inputMonth.value = month - 1
+      inputDay.value = day
+      emitInput(inputDate.value)
+    }
+
+    function genPickerTitle () {
+      return h(VDatePickerTitle, {
+        date: props.value ? (formatters.value.titleDate as (value: any) => string)(props.value) : '',
+        disabled: props.disabled,
+        readonly: props.readonly,
+        selectingYear: activePicker.value === 'YEAR',
+        year: formatters.value.year(props.value ? `${inputYear.value}` : tableDate.value),
+        yearIcon: props.yearIcon,
+        value: props.multiple && Array.isArray(props.value) ? props.value[0] : props.value,
+        'onUpdate:selectingYear': (value: boolean) => { activePicker.value = value ? 'YEAR' : props.type.toUpperCase() as any },
+      })
+    }
+
+    function genTableHeader () {
+      return h(VDatePickerHeader, {
+        nextIcon: props.nextIcon,
+        color: props.color,
+        dark: props.dark,
+        disabled: props.disabled,
+        format: props.headerDateFormat,
+        light: props.light,
+        locale: props.locale,
+        min: activePicker.value === 'DATE' ? minMonth.value : minYear.value,
+        max: activePicker.value === 'DATE' ? maxMonth.value : maxYear.value,
+        prevIcon: props.prevIcon,
+        readonly: props.readonly,
+        value: activePicker.value === 'DATE' ? `${pad(tableYear.value, 4)}-${pad(tableMonth.value + 1)}` : `${pad(tableYear.value, 4)}`,
+        onToggle: () => { activePicker.value = activePicker.value === 'DATE' ? 'MONTH' : 'YEAR' },
+        onInput: (value: string) => { tableDate.value = value },
+      })
+    }
+
+    function genDateTable () {
+      return h(VDatePickerDateTable, {
+        allowedDates: props.allowedDates,
+        color: props.color,
+        current: current.value,
+        dark: props.dark,
+        disabled: props.disabled,
+        events: props.events,
+        eventColor: props.eventColor,
+        firstDayOfWeek: props.firstDayOfWeek,
+        format: props.dayFormat,
+        light: props.light,
+        locale: props.locale,
+        min: props.min,
+        max: props.max,
+        readonly: props.readonly,
+        scrollable: props.scrollable,
+        showWeek: props.showWeek,
+        tableDate: `${pad(tableYear.value, 4)}-${pad(tableMonth.value + 1)}`,
+        value: props.value,
+        weekdayFormat: props.weekdayFormat,
+        onInput: dateClick,
+        onTableDate: (value: string) => { tableDate.value = value },
+        'onClick:date': (value: string) => emit('click:date', value),
+        'onDblclick:date': (value: string) => emit('dblclick:date', value),
+      })
+    }
+
+    function genMonthTable () {
+      return h(VDatePickerMonthTable, {
+        allowedDates: props.type === 'month' ? props.allowedDates : null,
+        color: props.color,
+        current: current.value ? sanitizeDateString(current.value, 'month') : null,
+        dark: props.dark,
+        disabled: props.disabled,
+        events: props.type === 'month' ? props.events : null,
+        eventColor: props.type === 'month' ? props.eventColor : null,
+        format: props.monthFormat,
+        light: props.light,
+        locale: props.locale,
+        min: minMonth.value,
+        max: maxMonth.value,
+        readonly: props.readonly && props.type === 'month',
+        scrollable: props.scrollable,
+        value: selectedMonths.value,
+        tableDate: `${pad(tableYear.value, 4)}`,
+        onInput: monthClick,
+        onTableDate: (value: string) => { tableDate.value = value },
+        'onClick:month': (value: string) => emit('click:month', value),
+        'onDblclick:month': (value: string) => emit('dblclick:month', value),
+      })
+    }
+
+    function genYears () {
+      return h(VDatePickerYears, {
+        color: props.color,
+        format: props.yearFormat,
+        locale: props.locale,
+        min: minYear.value,
+        max: maxYear.value,
+        value: tableYear.value,
+        onInput: yearClick,
+      })
+    }
+
+    function genPickerBody () {
+      const children = activePicker.value === 'YEAR'
+        ? [genYears()]
+        : [
+            genTableHeader(),
+            activePicker.value === 'DATE' ? genDateTable() : genMonthTable(),
+          ]
+
+      return h('div', { key: activePicker.value }, children)
+    }
+
+    function setInputDate () {
+      if (lastValue.value) {
+        const array = lastValue.value.split('-')
+        inputYear.value = parseInt(array[0], 10)
+        inputMonth.value = parseInt(array[1], 10) - 1
+        if (props.type === 'date') {
+          inputDay.value = parseInt(array[2], 10)
+        }
+      } else {
+        if (inputYear.value == null) inputYear.value = now.getFullYear()
+        if (inputMonth.value == null) inputMonth.value = now.getMonth()
+        if (inputDay.value == null) inputDay.value = now.getDate()
+      }
+    }
+
+    watch(tableDate, (val, prev) => {
+      if (prev != null) {
+        const sanitizeType = props.type === 'month' ? 'year' : 'month'
+        isReversing.value = sanitizeDateString(val, sanitizeType) < sanitizeDateString(prev, sanitizeType)
+      }
+      emit('update:pickerDate', val)
+    })
+
+    watch(() => props.pickerDate, val => {
+      if (val) {
+        tableDate.value = val
+      } else if (lastValue.value && props.type === 'date') {
+        tableDate.value = sanitizeDateString(lastValue.value, 'month')
+      } else if (lastValue.value && props.type === 'month') {
+        tableDate.value = sanitizeDateString(lastValue.value, 'year')
+      }
+    })
+
+    watch(() => props.value, (newValue, oldValue) => {
+      checkMultipleProp()
+      setInputDate()
+
+      if (!props.pickerDate) {
+        if (!props.multiple && typeof newValue === 'string') {
+          tableDate.value = sanitizeDateString(inputDate.value, props.type === 'month' ? 'year' : 'month')
+        } else if (props.multiple) {
+          const newArray = Array.isArray(newValue) ? newValue : []
+          const oldArray = Array.isArray(oldValue) ? oldValue : []
+          if (newArray.length && !oldArray.length) {
+            tableDate.value = sanitizeDateString(inputDate.value, props.type === 'month' ? 'year' : 'month')
+          }
+        }
+      }
+    })
+
+    watch(() => props.type, type => {
+      activePicker.value = type.toUpperCase() as 'DATE' | 'MONTH' | 'YEAR'
+
+      if (props.value) {
+        const values = props.multiple
+          ? (Array.isArray(props.value) ? props.value : [])
+          : typeof props.value === 'string'
+            ? [props.value]
+            : []
+
+        const output = values
+          .map(val => sanitizeDateString(val, type === 'month' ? 'month' : type))
+          .filter(isDateAllowedFn)
+
+        if (props.multiple) {
+          emit('input', output)
+        } else if (output[0]) {
+          emit('input', output[0])
+        }
+      }
+    })
+
+    checkMultipleProp()
+    if (props.pickerDate !== tableDate.value) {
+      emit('update:pickerDate', tableDate.value)
+    }
+    setInputDate()
+
+    return () => {
+      const pickerSlots: Record<string, () => VNode | VNode[] | undefined> = {}
+
+      if (!props.noTitle) {
+        const title = genPickerTitle()
+        if (title) pickerSlots.title = () => title
+      }
+
+      const body = genPickerBody()
+      if (body) pickerSlots.default = () => body
+
+      const actions = genPickerActionsSlot()
+      if (actions) pickerSlots.actions = () => actions
+
+      return h(VPicker, {
+        class: ['v-picker--date', themeClasses.value],
+        color: props.headerColor || props.color,
+        dark: props.dark,
+        fullWidth: props.fullWidth,
+        landscape: props.landscape,
+        light: props.light,
+        width: props.width,
+      }, pickerSlots)
+    }
+  },
 })

@@ -1,126 +1,136 @@
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-// Mixins
-import Returnable from '../../mixins/returnable'
-import Themeable from '../../mixins/themeable'
+// Components
+import VBtn from '../VBtn'
+import VMenu from '../VMenu'
+
+// Composables
+import useReturnable, { returnableProps } from '../../composables/useReturnable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
 
 // Utils
 import { keyCodes } from '../../util/helpers'
 
-import VBtn from '../VBtn'
-import VMenu from '../VMenu'
+// Types
+import { defineComponent, h, nextTick, ref, watch } from 'vue'
 
-/* @vue/component */
-export default {
+export default defineComponent({
   name: 'v-edit-dialog',
 
-  mixins: [Returnable, Themeable],
-
   props: {
+    ...returnableProps,
+    ...themeProps,
     cancelText: {
-      default: 'Cancel'
+      type: String,
+      default: 'Cancel',
     },
     large: Boolean,
     lazy: Boolean,
     persistent: Boolean,
     saveText: {
-      default: 'Save'
+      type: String,
+      default: 'Save',
     },
     transition: {
       type: String,
-      default: 'slide-x-reverse-transition'
-    }
+      default: 'slide-x-reverse-transition',
+    },
   },
 
-  data () {
-    return {
-      isActive: false
-    }
-  },
+  emits: ['open', 'close', 'cancel', 'save', 'update:returnValue'],
 
-  watch: {
-    isActive (val) {
+  setup (props, { emit, slots }) {
+    const isActive = ref(false)
+    const contentRef = ref(null)
+
+    const { themeClasses } = useThemeable(props)
+    const { save } = useReturnable(props, { isActive, emit })
+
+    function focus () {
+      const input = contentRef.value?.querySelector('input')
+      input && input.focus()
+    }
+
+    function cancel () {
+      isActive.value = false
+      emit('cancel')
+    }
+
+    watch(isActive, val => {
       if (val) {
-        this.$emit('open')
-        setTimeout(this.focus, 50) // Give DOM time to paint
+        emit('open')
+        nextTick(() => {
+          setTimeout(() => focus(), 50)
+        })
       } else {
-        this.$emit('close')
+        emit('close')
+      }
+    })
+
+    function genButton (fn, text) {
+      return h(VBtn, {
+        flat: true,
+        color: 'primary',
+        light: true,
+        onClick: fn,
+      }, {
+        default: () => text,
+      })
+    }
+
+    function genActions () {
+      return h('div', {
+        class: 'v-small-dialog__actions',
+      }, [
+        genButton(cancel, props.cancelText),
+        genButton(() => {
+          save(props.returnValue)
+          emit('save')
+        }, props.saveText),
+      ])
+    }
+
+    function onKeydown (e) {
+      const input = contentRef.value?.querySelector('input')
+      if (e.keyCode === keyCodes.esc) {
+        cancel()
+      }
+      if (e.keyCode === keyCodes.enter && input) {
+        save(input.value)
+        emit('save')
       }
     }
-  },
 
-  methods: {
-    cancel () {
-      this.isActive = false
-      this.$emit('cancel')
-    },
-    focus () {
-      const input = this.$refs.content.querySelector('input')
-      input && input.focus()
-    },
-    genButton (fn, text) {
-      return this.$createElement(VBtn, {
-        props: {
-          flat: true,
-          color: 'primary',
-          light: true
-        },
-        on: { click: fn }
-      }, text)
-    },
-    genActions () {
-      return this.$createElement('div', {
-        'class': 'v-small-dialog__actions'
-      }, [
-        this.genButton(this.cancel, this.cancelText),
-        this.genButton(() => {
-          this.save(this.returnValue)
-          this.$emit('save')
-        }, this.saveText)
-      ])
-    },
-    genContent () {
-      return this.$createElement('div', {
-        on: {
-          keydown: e => {
-            const input = this.$refs.content.querySelector('input')
-            e.keyCode === keyCodes.esc && this.cancel()
-            if (e.keyCode === keyCodes.enter && input) {
-              this.save(input.value)
-              this.$emit('save')
-            }
-          }
-        },
-        ref: 'content'
-      }, [this.$slots.input])
+    function genContent () {
+      return h('div', {
+        ref: contentRef,
+        onKeydown,
+      }, slots.input?.())
     }
-  },
 
-  render (h) {
-    return h(VMenu, {
-      staticClass: 'v-small-dialog',
-      class: this.themeClasses,
-      props: {
+    return () => {
+      const children = [genContent()]
+      if (props.large) {
+        children.push(genActions())
+      }
+
+      return h(VMenu, {
+        class: ['v-small-dialog', themeClasses.value],
         contentClass: 'v-small-dialog__content',
-        transition: this.transition,
+        transition: props.transition,
         origin: 'top right',
         right: true,
-        value: this.isActive,
-        closeOnClick: !this.persistent,
+        value: isActive.value,
+        closeOnClick: !props.persistent,
         closeOnContentClick: false,
-        lazy: this.lazy,
-        light: this.light,
-        dark: this.dark
-      },
-      on: {
-        input: val => (this.isActive = val)
-      }
-    }, [
-      h('a', {
-        slot: 'activator'
-      }, this.$slots.default),
-      this.genContent(),
-      this.large ? this.genActions() : null
-    ])
-  }
-}
+        lazy: props.lazy,
+        light: props.light,
+        dark: props.dark,
+        onInput: val => { isActive.value = val },
+      }, {
+        activator: () => h('a', {}, slots.default?.()),
+        default: () => children,
+      })
+    }
+  },
+})
