@@ -1,4 +1,4 @@
-import '../../stylus/components/_progress-circular.styl'
+import "@/css/vuetify.css"
 
 // Mixins
 import Colorable from '../../mixins/colorable'

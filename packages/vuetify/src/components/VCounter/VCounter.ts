@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_counters.styl'
+import "@/css/vuetify.css"
 
 // Mixins
 import Themeable, { functionalThemeClasses } from '../../mixins/themeable'

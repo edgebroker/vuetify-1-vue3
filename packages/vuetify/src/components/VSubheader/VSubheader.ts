@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_subheaders.styl'
+import "@/css/vuetify.css"
 
 // Mixins
 import Themeable from '../../mixins/themeable'

@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_textarea.styl'
+import "@/css/vuetify.css"
 
 // Extensions
 import VTextField from '../VTextField/VTextField'

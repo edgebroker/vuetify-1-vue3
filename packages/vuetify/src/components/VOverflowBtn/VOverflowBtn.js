@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_overflow-buttons.styl'
+import "@/css/vuetify.css"
 
 // Extensions
 import VSelect from '../VSelect/VSelect'

@@ -1,4 +1,4 @@
-import '../../stylus/components/_pagination.styl'
+import "@/css/vuetify.css"
 
 import VIcon from '../VIcon'
 

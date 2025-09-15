@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_autocompletes.styl'
+import "@/css/vuetify.css"
 
 // Extensions
 import VSelect, { defaultMenuProps as VSelectMenuProps } from '../VSelect/VSelect'

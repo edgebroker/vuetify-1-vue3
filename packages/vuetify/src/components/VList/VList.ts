@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_lists.styl'
+import "@/css/vuetify.css"
 import VListGroup from './VListGroup'
 
 // Mixins

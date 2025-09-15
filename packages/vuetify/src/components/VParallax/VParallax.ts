@@ -1,5 +1,5 @@
 // Style
-import '../../stylus/components/_parallax.styl'
+import "@/css/vuetify.css"
 
 // Mixins
 import Translatable from '../../mixins/translatable'

@@ -1,6 +1,5 @@
 // Styles
-import '../../stylus/components/_selection-controls.styl'
-import '../../stylus/components/_radio-group.styl'
+import "@/css/vuetify.css"
 
 // Components
 import VInput from '../VInput'

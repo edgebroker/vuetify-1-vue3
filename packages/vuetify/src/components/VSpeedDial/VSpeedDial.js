@@ -1,4 +1,4 @@
-import '../../stylus/components/_speed-dial.styl'
+import "@/css/vuetify.css"
 
 import Toggleable from '../../mixins/toggleable'
 import Positionable from '../../mixins/positionable'

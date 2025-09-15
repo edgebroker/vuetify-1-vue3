@@ -1,4 +1,4 @@
-import '../../stylus/components/_bottom-sheets.styl'
+import "@/css/vuetify.css"
 
 import VDialog from '../VDialog/VDialog'
 

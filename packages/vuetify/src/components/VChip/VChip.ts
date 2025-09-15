@@ -1,4 +1,4 @@
-import '../../stylus/components/_chips.styl'
+import "@/css/vuetify.css"
 
 // Types
 import { CreateElement, VNode } from 'vue'

@@ -1,5 +1,4 @@
-import '../../stylus/components/_pickers.styl'
-import '../../stylus/components/_cards.styl'
+import "@/css/vuetify.css"
 
 // Mixins
 import Colorable from '../../mixins/colorable'

@@ -1,4 +1,4 @@
-import '../../stylus/components/_grid.styl'
+import "@/css/vuetify.css"
 
 import Grid from './grid'
 

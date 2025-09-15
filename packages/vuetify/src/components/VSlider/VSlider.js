@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_sliders.styl'
+import "@/css/vuetify.css"
 
 // Components
 import { VScaleTransition } from '../transitions'

@@ -1,4 +1,4 @@
-import '../../stylus/components/_expansion-panel.styl'
+import "@/css/vuetify.css"
 
 import { VExpansionPanelContent } from '.'
 

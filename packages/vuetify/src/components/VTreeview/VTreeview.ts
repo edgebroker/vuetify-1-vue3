@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_treeview.styl'
+import "@/css/vuetify.css"
 
 // Types
 import { VNode, VNodeChildrenArrayContents } from 'vue'

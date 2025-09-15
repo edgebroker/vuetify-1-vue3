@@ -1,5 +1,4 @@
-import '../../stylus/components/_selection-controls.styl'
-import '../../stylus/components/_switch.styl'
+import "@/css/vuetify.css"
 
 // Mixins
 import Selectable from '../../mixins/selectable'

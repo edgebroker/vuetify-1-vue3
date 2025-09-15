@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_forms.styl'
+import "@/css/vuetify.css"
 
 import { provide as RegistrableProvide } from '../../mixins/registrable'
 

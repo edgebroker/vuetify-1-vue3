@@ -1,5 +1,5 @@
 // Styles
-import '../../stylus/components/_button-toggle.styl'
+import "@/css/vuetify.css"
 
 // Mixins
 import ButtonGroup from '../../mixins/button-group'
