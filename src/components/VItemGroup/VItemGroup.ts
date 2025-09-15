@@ -1,27 +1,20 @@
-// Styles
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-// Mixins
-import Groupable from '../../mixins/groupable'
-import Proxyable from '../../mixins/proxyable'
-import Themeable from '../../mixins/themeable'
+// Composables
+import useProxyable from '../../composables/useProxyable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
 
 // Utilities
-import mixins from '../../util/mixins'
 import { consoleWarn } from '../../util/console'
 
 // Types
-import { VNode } from 'vue/types'
+import { defineComponent, h, computed, provide, watch, nextTick, getCurrentInstance } from 'vue'
 
-type GroupableInstance = InstanceType<typeof Groupable> & { value?: any }
-
-export const BaseItemGroup = mixins(
-  Proxyable,
-  Themeable
-).extend({
+export const BaseItemGroup = defineComponent({
   name: 'base-item-group',
 
   props: {
+    value: null,
     activeClass: {
       type: String,
       default: 'v-item--active'
@@ -31,204 +24,130 @@ export const BaseItemGroup = mixins(
       type: [Number, String],
       default: null
     },
-    multiple: Boolean
+    multiple: Boolean,
+    ...themeProps
   },
 
-  data () {
-    return {
-      // As long as a value is defined, show it
-      // Otherwise, check if multiple
-      // to determine which default to provide
-      internalLazyValue: this.value !== undefined
-        ? this.value
-        : this.multiple ? [] : undefined,
-      items: [] as GroupableInstance[]
+  emits: ['change'],
+
+  setup (props, { slots, emit }) {
+    const { internalLazyValue, internalValue } = useProxyable(props, emit)
+    const { themeClasses } = useThemeable(props)
+    const items: any[] = []
+    const vm = getCurrentInstance()
+
+    if (props.multiple && !Array.isArray(internalValue.value)) {
+      consoleWarn('Model must be bound to an array if the multiple property is true.', vm)
     }
-  },
 
-  computed: {
-    classes (): Record<string, boolean> {
-      return {
-        ...this.themeClasses
-      }
-    },
-    selectedItems (): GroupableInstance[] {
-      return this.items.filter((item, index) => {
-        return this.toggleMethod(this.getValue(item, index))
-      })
-    },
-    selectedValues (): any[] {
-      return Array.isArray(this.internalValue)
-        ? this.internalValue
-        : [this.internalValue]
-    },
-    toggleMethod (): (v: any) => boolean {
-      if (!this.multiple) {
-        return (v: any) => this.internalValue === v
-      }
-
-      const internalValue = this.internalValue
-      if (Array.isArray(internalValue)) {
-        return (v: any) => internalValue.includes(v)
-      }
-
-      return () => false
+    function getValue (item: any, i: number) {
+      return item.value == null || item.value === '' ? i : item.value
     }
-  },
 
-  watch: {
-    internalValue () {
-      // https://github.com/vuetifyjs/vuetify/issues/5352
-      this.$nextTick(this.updateItemsState)
+    function onClick (item: any, index: number) {
+      updateInternalValue(getValue(item, index))
     }
-  },
 
-  created () {
-    if (this.multiple && !Array.isArray(this.internalValue)) {
-      consoleWarn('Model must be bound to an array if the multiple property is true.', this)
-    }
-  },
-
-  methods: {
-    getValue (item: GroupableInstance, i: number): unknown {
-      return item.value == null || item.value === ''
-        ? i
-        : item.value
-    },
-    onClick (item: GroupableInstance, index: number) {
-      this.updateInternalValue(
-        this.getValue(item, index)
-      )
-    },
-    register (item: GroupableInstance) {
-      const index = this.items.push(item) - 1
-
-      item.$on('change', () => this.onClick(item, index))
-
-      // If no value provided and mandatory,
-      // assign first registered item
-      if (this.mandatory && this.internalLazyValue == null) {
-        this.updateMandatory()
+    function register (item: any) {
+      const index = items.push(item) - 1
+      item.$on && item.$on('change', () => onClick(item, index))
+      if (props.mandatory && internalLazyValue.value == null) {
+        updateMandatory()
       }
+      updateItem(item, index)
+    }
 
-      this.updateItem(item, index)
-    },
-    unregister (item: GroupableInstance) {
-      if (this._isDestroyed) return
-
-      const index = this.items.indexOf(item)
-      const value = this.getValue(item, index)
-
-      this.items.splice(index, 1)
-
-      const valueIndex = this.selectedValues.indexOf(value)
-
-      // Items is not selected, do nothing
+    function unregister (item: any) {
+      const index = items.indexOf(item)
+      const value = getValue(item, index)
+      items.splice(index, 1)
+      const valueIndex = selectedValues.value.indexOf(value)
       if (valueIndex < 0) return
-
-      // If not mandatory, use regular update process
-      if (!this.mandatory) {
-        return this.updateInternalValue(value)
+      if (!props.mandatory) {
+        updateInternalValue(value)
+        return
       }
-
-      // Remove the value
-      if (this.multiple && Array.isArray(this.internalValue)) {
-        this.internalValue = this.internalValue.filter(v => v !== value)
+      if (props.multiple && Array.isArray(internalValue.value)) {
+        internalValue.value = internalValue.value.filter(v => v !== value)
       } else {
-        this.internalValue = undefined
+        internalValue.value = undefined
       }
-
-      // If mandatory and we have no selection
-      // add the last item as value
-      /* istanbul ignore else */
-      if (!this.selectedItems.length) {
-        this.updateMandatory(true)
+      if (!selectedItems.value.length) {
+        updateMandatory(true)
       }
-    },
-    updateItem (item: GroupableInstance, index: number) {
-      const value = this.getValue(item, index)
-
-      item.isActive = this.toggleMethod(value)
-    },
-    updateItemsState () {
-      if (this.mandatory &&
-        !this.selectedItems.length
-      ) {
-        return this.updateMandatory()
-      }
-
-      // TODO: Make this smarter so it
-      // doesn't have to iterate every
-      // child in an update
-      this.items.forEach(this.updateItem)
-    },
-    updateInternalValue (value: any) {
-      this.multiple
-        ? this.updateMultiple(value)
-        : this.updateSingle(value)
-    },
-    updateMandatory (last?: boolean) {
-      if (!this.items.length) return
-
-      const index = last ? this.items.length - 1 : 0
-
-      this.updateInternalValue(
-        this.getValue(this.items[index], index)
-      )
-    },
-    updateMultiple (value: any) {
-      const defaultValue = Array.isArray(this.internalValue)
-        ? this.internalValue
-        : []
-      const internalValue = defaultValue.slice()
-      const index = internalValue.findIndex(val => val === value)
-
-      if (
-        this.mandatory &&
-        // Item already exists
-        index > -1 &&
-        // value would be reduced below min
-        internalValue.length - 1 < 1
-      ) return
-
-      if (
-        // Max is set
-        this.max != null &&
-        // Item doesn't exist
-        index < 0 &&
-        // value would be increased above max
-        internalValue.length + 1 > this.max
-      ) return
-
-      index > -1
-        ? internalValue.splice(index, 1)
-        : internalValue.push(value)
-
-      this.internalValue = internalValue
-    },
-    updateSingle (value: any) {
-      const isSame = value === this.internalValue
-
-      if (this.mandatory && isSame) return
-
-      this.internalValue = isSame ? undefined : value
     }
-  },
 
-  render (h): VNode {
-    return h('div', {
-      staticClass: 'v-item-group',
-      class: this.classes
-    }, this.$slots.default)
+    function updateItem (item: any, index: number) {
+      const value = getValue(item, index)
+      item.isActive = toggleMethod.value(value)
+    }
+
+    const selectedItems = computed(() => items.filter((item, index) => toggleMethod.value(getValue(item, index))))
+
+    const selectedValues = computed(() => Array.isArray(internalValue.value) ? internalValue.value : [internalValue.value])
+
+    const toggleMethod = computed(() => {
+      if (!props.multiple) {
+        return (v: any) => internalValue.value === v
+      }
+      const internal = internalValue.value
+      if (Array.isArray(internal)) {
+        return (v: any) => internal.includes(v)
+      }
+      return () => false
+    })
+
+    function updateItemsState () {
+      if (props.mandatory && !selectedItems.value.length) {
+        return updateMandatory()
+      }
+      items.forEach((item, index) => updateItem(item, index))
+    }
+
+    function updateInternalValue (value: any) {
+      props.multiple ? updateMultiple(value) : updateSingle(value)
+    }
+
+    function updateMandatory (last = false) {
+      if (!items.length) return
+      const index = last ? items.length - 1 : 0
+      updateInternalValue(getValue(items[index], index))
+    }
+
+    function updateMultiple (value: any) {
+      const internal = Array.isArray(internalValue.value) ? internalValue.value.slice() : []
+      const index = internal.findIndex(val => val === value)
+      if (props.mandatory && index > -1 && internal.length - 1 < 1) return
+      if (props.max != null && index < 0 && internal.length + 1 > Number(props.max)) return
+      index > -1 ? internal.splice(index, 1) : internal.push(value)
+      internalValue.value = internal
+    }
+
+    function updateSingle (value: any) {
+      const isSame = value === internalValue.value
+      if (props.mandatory && isSame) return
+      internalValue.value = isSame ? undefined : value
+    }
+
+    watch(internalValue, () => {
+      nextTick(updateItemsState)
+    })
+
+    provide('itemGroup', { register, unregister, activeClass: props.activeClass })
+
+    const classes = computed(() => ({
+      ...themeClasses.value
+    }))
+
+    return () => h('div', {
+      class: ['v-item-group', classes.value]
+    }, slots.default && slots.default())
   }
 })
 
-export default BaseItemGroup.extend({
+export default defineComponent({
   name: 'v-item-group',
-
-  provide (): object {
-    return {
-      itemGroup: this
-    }
-  }
+  extends: BaseItemGroup
 })
+
+;(BaseItemGroup as any).extend = (ext: any) => defineComponent({ ...ext, extends: BaseItemGroup })

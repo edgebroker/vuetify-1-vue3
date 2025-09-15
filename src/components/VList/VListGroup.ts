@@ -1,47 +1,19 @@
 // Components
 import VIcon from '../VIcon'
-import VList from './VList'
 
-// Mixins
-import Bootable from '../../mixins/bootable'
-import Toggleable from '../../mixins/toggleable'
-import { Registrable, inject as RegistrableInject } from '../../mixins/registrable'
-import { Route } from 'vue-router'
+// Composables
+import useBootable from '../../composables/useBootable'
+import useToggleable from '../../composables/useToggleable'
+import useRegistrableInject from '../../composables/useRegistrableInject'
 
 // Transitions
 import { VExpandTransition } from '../transitions'
 
 // Utils
-import mixins, { ExtractVue } from '../../util/mixins'
+import { defineComponent, h, computed, inject, getCurrentInstance, onMounted, onBeforeUnmount, watch } from 'vue'
 
-// Types
-import Vue, { VNode } from 'vue'
-
-type VListInstance = InstanceType<typeof VList>
-
-interface options extends Vue {
-  list: VListInstance
-  listClick: Function
-  $route: Route
-}
-
-export default mixins<options &
-/* eslint-disable indent */
-  ExtractVue<[
-    typeof Bootable,
-    typeof Toggleable,
-    Registrable<'list'>
-  ]>
-/* eslint-enable indent */
->(
-  Bootable,
-  RegistrableInject('list', 'v-list-group', 'v-list'),
-  Toggleable
-  /* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-list-group',
-
-  inject: ['listClick'],
 
   props: {
     activeClass: {
@@ -56,149 +28,125 @@ export default mixins<options &
     group: String,
     noAction: Boolean,
     prependIcon: String,
-    subGroup: Boolean
+    subGroup: Boolean,
+    lazy: Boolean,
+    value: null
   },
 
-  data: () => ({
-    groups: []
-  }),
+  emits: ['input', 'click'],
 
-  computed: {
-    groupClasses (): object {
-      return {
-        'v-list__group--active': this.isActive,
-        'v-list__group--disabled': this.disabled
-      }
-    },
-    headerClasses (): object {
-      return {
-        'v-list__group__header--active': this.isActive,
-        'v-list__group__header--sub-group': this.subGroup
-      }
-    },
-    itemsClasses (): object {
-      return {
-        'v-list__group__items--no-action': this.noAction
-      }
-    }
-  },
+  setup (props, { slots, emit, expose }) {
+    const { isActive } = useToggleable(props, emit)
+    const { showLazyContent } = useBootable(props, { isActive })
+    const list = useRegistrableInject('list', 'v-list-group', 'v-list')
+    const listClick = inject('listClick') as any
+    const vm = getCurrentInstance()
 
-  watch: {
-    isActive (val) {
-      if (!this.subGroup && val) {
-        this.listClick(this._uid)
+    onMounted(() => {
+      list && list.register && vm && list.register(vm.proxy)
+      if (props.group && vm?.proxy.$route && props.value == null) {
+        isActive.value = matchRoute(vm.proxy.$route.path)
       }
-    },
-    $route (to) {
-      const isActive = this.matchRoute(to.path)
+    })
 
-      if (this.group) {
-        if (isActive && this.isActive !== isActive) {
-          this.listClick(this._uid)
+    onBeforeUnmount(() => {
+      list && list.unregister && vm && list.unregister(vm.proxy)
+    })
+
+    watch(isActive, val => {
+      if (!props.subGroup && val) {
+        listClick && listClick(vm?.uid)
+      }
+    })
+
+    watch(() => vm?.proxy.$route, to => {
+      if (!to) return
+      const isMatch = matchRoute(to.path)
+      if (props.group) {
+        if (isMatch && isActive.value !== isMatch) {
+          listClick && listClick(vm?.uid)
         }
-
-        this.isActive = isActive
+        isActive.value = isMatch
       }
+    })
+
+    const groupClasses = computed(() => ({
+      'v-list__group--active': isActive.value,
+      'v-list__group--disabled': props.disabled
+    }))
+
+    const headerClasses = computed(() => ({
+      'v-list__group__header--active': isActive.value,
+      'v-list__group__header--sub-group': props.subGroup
+    }))
+
+    const itemsClasses = computed(() => ({
+      'v-list__group__items--no-action': props.noAction
+    }))
+
+    function click (e: Event) {
+      if (props.disabled) return
+      emit('click', e)
+      isActive.value = !isActive.value
     }
-  },
 
-  mounted () {
-    this.list.register(this)
-
-    if (this.group &&
-      this.$route &&
-      this.value == null
-    ) {
-      this.isActive = this.matchRoute(this.$route.path)
+    function genIcon (icon: any) {
+      return h(VIcon, [icon])
     }
-  },
 
-  beforeDestroy () {
-    this.list.unregister(this._uid)
-  },
-
-  methods: {
-    click (e: Event) {
-      if (this.disabled) return
-
-      this.$emit('click', e)
-
-      this.isActive = !this.isActive
-    },
-    genIcon (icon: string | false): VNode {
-      return this.$createElement(VIcon, icon)
-    },
-    genAppendIcon () {
-      const icon = !this.subGroup ? this.appendIcon : false
-
-      if (!icon && !this.$slots.appendIcon) return null
-
-      return this.$createElement('div', {
-        staticClass: 'v-list__group__header__append-icon'
-      }, [
-        this.$slots.appendIcon || this.genIcon(icon)
+    function genAppendIcon () {
+      const icon = !props.subGroup ? props.appendIcon : false
+      if (!icon && !slots.appendIcon) return null
+      return h('div', { class: 'v-list__group__header__append-icon' }, [
+        slots.appendIcon?.() || genIcon(icon)
       ])
-    },
-    genGroup () {
-      return this.$createElement('div', {
-        staticClass: 'v-list__group__header',
-        class: this.headerClasses,
-        on: {
-          ...this.$listeners,
-          click: this.click
-        },
+    }
+
+    function genPrependIcon () {
+      const icon = props.prependIcon ? props.prependIcon : props.subGroup ? '$vuetify.icons.subgroup' : false
+      if (!icon && !slots.prependIcon) return null
+      return h('div', {
+        class: {
+          'v-list__group__header__prepend-icon': true,
+          [props.activeClass]: isActive.value
+        }
+      }, [slots.prependIcon?.() || genIcon(icon)])
+    }
+
+    function genGroup () {
+      return h('div', {
+        class: ['v-list__group__header', headerClasses.value],
+        onClick: click,
         ref: 'item'
       }, [
-        this.genPrependIcon(),
-        this.$slots.activator,
-        this.genAppendIcon()
+        genPrependIcon(),
+        slots.activator?.(),
+        genAppendIcon()
       ])
-    },
-    genItems () {
-      return this.$createElement('div', {
-        staticClass: 'v-list__group__items',
-        class: this.itemsClasses,
-        directives: [{
-          name: 'show',
-          value: this.isActive
-        }],
-        ref: 'group'
-      }, this.showLazyContent(this.$slots.default))
-    },
-    genPrependIcon () {
-      const icon = this.prependIcon
-        ? this.prependIcon
-        : this.subGroup
-          ? '$vuetify.icons.subgroup'
-          : false
-
-      if (!icon && !this.$slots.prependIcon) return null
-
-      return this.$createElement('div', {
-        staticClass: 'v-list__group__header__prepend-icon',
-        'class': {
-          [this.activeClass]: this.isActive
-        }
-      }, [
-        this.$slots.prependIcon || this.genIcon(icon)
-      ])
-    },
-    toggle (uid: number) {
-      this.isActive = this._uid === uid
-    },
-    matchRoute (to: string) {
-      if (!this.group) return false
-      return to.match(this.group) !== null
     }
-  },
 
-  render (h): VNode {
-    return h('div', {
-      staticClass: 'v-list__group',
-      class: this.groupClasses
-    }, [
-      this.genGroup(),
-      h(VExpandTransition, [this.genItems()])
+    function genItems () {
+      return h('div', {
+        class: ['v-list__group__items', itemsClasses.value],
+        style: { display: isActive.value ? '' : 'none' },
+        ref: 'group'
+      }, showLazyContent(slots.default?.()))
+    }
+
+    function toggle (uid: number) {
+      isActive.value = vm?.uid === uid
+    }
+
+    function matchRoute (to: string) {
+      if (!props.group) return false
+      return to.match(props.group) !== null
+    }
+
+    expose({ toggle })
+
+    return () => h('div', { class: ['v-list__group', groupClasses.value] }, [
+      genGroup(),
+      h(VExpandTransition, [genItems()])
     ])
   }
 })

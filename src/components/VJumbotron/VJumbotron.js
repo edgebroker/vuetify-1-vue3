@@ -1,22 +1,18 @@
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-// Mixins
-import Colorable from '../../mixins/colorable'
-import Routable from '../../mixins/routable'
-import Themeable from '../../mixins/themeable'
+// Composables
+import useColorable, { colorProps } from '../../composables/useColorable'
+import useRoutable, { routableProps } from '../../composables/useRoutable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
 
 // Utils
 import { deprecate } from '../../util/console'
 
-/* @vue/component */
-export default {
-  name: 'v-jumbotron',
+// Types
+import { defineComponent, h, computed, onMounted, getCurrentInstance } from 'vue'
 
-  mixins: [
-    Colorable,
-    Routable,
-    Themeable
-  ],
+export default defineComponent({
+  name: 'v-jumbotron',
 
   props: {
     gradient: String,
@@ -28,70 +24,66 @@ export default {
     tag: {
       type: String,
       default: 'div'
-    }
+    },
+    ...colorProps,
+    ...routableProps,
+    ...themeProps
   },
 
-  computed: {
-    backgroundStyles () {
+  setup (props, { slots, attrs, emit }) {
+    const { setBackgroundColor } = useColorable(props)
+    const { generateRouteLink } = useRoutable(props, { attrs, emit })
+    const { themeClasses } = useThemeable(props)
+    const vm = getCurrentInstance()
+
+    const backgroundStyles = computed(() => {
       const styles = {}
-
-      if (this.gradient) {
-        styles.background = `linear-gradient(${this.gradient})`
+      if (props.gradient) {
+        styles.background = `linear-gradient(${props.gradient})`
       }
-
       return styles
-    },
-    classes () {
-      return this.themeClasses
-    },
-    styles () {
-      return {
-        height: this.height
-      }
-    }
-  },
+    })
 
-  mounted () {
-    deprecate('v-jumbotron', this.src ? 'v-img' : 'v-responsive', this)
-  },
+    const classes = computed(() => themeClasses.value)
+    const styles = computed(() => ({ height: props.height }))
 
-  methods: {
-    genBackground () {
-      return this.$createElement('div', this.setBackgroundColor(this.color, {
-        staticClass: 'v-jumbotron__background',
-        style: this.backgroundStyles
+    function genBackground () {
+      return h('div', setBackgroundColor(props.color, {
+        class: 'v-jumbotron__background',
+        style: backgroundStyles.value
       }))
-    },
-    genContent () {
-      return this.$createElement('div', {
-        staticClass: 'v-jumbotron__content'
-      }, this.$slots.default)
-    },
-    genImage () {
-      if (!this.src) return null
-      if (this.$slots.img) return this.$slots.img({ src: this.src })
+    }
 
-      return this.$createElement('img', {
-        staticClass: 'v-jumbotron__image',
-        attrs: { src: this.src }
+    function genContent () {
+      return h('div', { class: 'v-jumbotron__content' }, slots.default?.())
+    }
+
+    function genImage () {
+      if (!props.src) return null
+      if (slots.img) return slots.img({ src: props.src })
+      return h('img', {
+        class: 'v-jumbotron__image',
+        src: props.src
       })
-    },
-    genWrapper () {
-      return this.$createElement('div', {
-        staticClass: 'v-jumbotron__wrapper'
-      }, [
-        this.genImage(),
-        this.genBackground(),
-        this.genContent()
+    }
+
+    function genWrapper () {
+      return h('div', { class: 'v-jumbotron__wrapper' }, [
+        genImage(),
+        genBackground(),
+        genContent()
       ])
     }
-  },
 
-  render (h) {
-    const { tag, data } = this.generateRouteLink(this.classes)
-    data.staticClass = 'v-jumbotron'
-    data.style = this.styles
+    onMounted(() => {
+      deprecate('v-jumbotron', props.src ? 'v-img' : 'v-responsive', vm)
+    })
 
-    return h(tag, data, [this.genWrapper()])
+    return () => {
+      const { tag, data } = generateRouteLink(classes.value)
+      data.class = ['v-jumbotron', data.class]
+      data.style = { ...styles.value, ...data.style }
+      return h(tag, data, [genWrapper()])
+    }
   }
-}
+})
