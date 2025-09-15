@@ -1,18 +1,16 @@
-// Mixins
-import Toggleable from '../../mixins/toggleable'
+import { cloneVNode, defineComponent, getCurrentInstance } from 'vue'
+
+// Composables
 import useDelayable from '../../composables/useDelayable'
+import useToggleable from '../../composables/useToggleable'
 
 // Utilities
-import mixins from '../../util/mixins'
 import { consoleWarn } from '../../util/console'
 
 // Types
-import { VNode, ScopedSlotChildren } from 'vue/types/vnode'
+import type { VNode } from 'vue'
 
-export default mixins(
-  Toggleable
-  /* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-hover',
 
   props: {
@@ -34,52 +32,48 @@ export default mixins(
     }
   },
 
-  setup (props) {
-    return useDelayable(props)
-  },
+  setup (props, { slots, emit }) {
+    const { isActive } = useToggleable(props, emit)
+    const { runDelay } = useDelayable(props)
+    const vm = getCurrentInstance()
 
-  methods: {
-    onMouseEnter () {
-      this.runDelay('open')
-    },
-    onMouseLeave () {
-      this.runDelay('close')
-    }
-  },
-
-  render (): VNode {
-    if (!this.$scopedSlots.default && this.value === undefined) {
-      consoleWarn('v-hover is missing a default scopedSlot or bound value', this)
-
-      return null as any
+    function onMouseEnter () {
+      runDelay('open')
     }
 
-    let element: VNode | ScopedSlotChildren
-
-    if (this.$scopedSlots.default) {
-      element = this.$scopedSlots.default({ hover: this.isActive })
-    } else if (this.$slots.default && this.$slots.default.length === 1) {
-      element = this.$slots.default[0]
+    function onMouseLeave () {
+      runDelay('close')
     }
 
-    if (Array.isArray(element) && element.length === 1) {
-      element = element[0]
+    return () => {
+      let slot = slots.default?.({ hover: isActive.value })
+
+      if (!slot && props.value === undefined) {
+        consoleWarn('v-hover is missing a default scopedSlot or bound value', vm?.proxy)
+        return null as any
+      }
+
+      let element: VNode | undefined
+
+      if (Array.isArray(slot)) {
+        if (slot.length === 1) element = slot[0]
+      } else {
+        element = slot
+      }
+
+      if (!element || Array.isArray(element)) {
+        consoleWarn('v-hover should only contain a single element', vm?.proxy)
+        return element as any
+      }
+
+      if (!props.disabled) {
+        element = cloneVNode(element, {
+          onMouseenter: onMouseEnter,
+          onMouseleave: onMouseLeave
+        })
+      }
+
+      return element
     }
-
-    if (!element || Array.isArray(element) || !element.tag) {
-      consoleWarn('v-hover should only contain a single element', this)
-
-      return element as any
-    }
-
-    if (!this.disabled) {
-      element.data = element.data || {}
-      this._g(element.data, {
-        mouseenter: this.onMouseEnter,
-        mouseleave: this.onMouseLeave
-      })
-    }
-
-    return element
   }
 })
