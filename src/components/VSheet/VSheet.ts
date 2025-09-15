@@ -1,25 +1,18 @@
 // Styles
 import "@/css/vuetify.css"
 
-// Mixins
-import Colorable from '../../mixins/colorable'
-import Elevatable from '../../mixins/elevatable'
-import Measurable from '../../mixins/measurable'
-import Themeable from '../../mixins/themeable'
-
-// Helpers
-import mixins from '../../util/mixins'
+// Composables
+import useColorable, { colorProps } from '../../composables/useColorable'
+import useElevatable from '../../composables/useElevatable'
+import useMeasurable, { measurableProps } from '../../composables/useMeasurable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
 
 // Types
-import { VNode } from 'vue'
+import { defineComponent, computed, h } from 'vue'
+import type { VNode } from 'vue'
 
 /* @vue/component */
-export default mixins(
-  Colorable,
-  Elevatable,
-  Measurable,
-  Themeable
-).extend({
+export default defineComponent({
   name: 'v-sheet',
 
   props: {
@@ -27,34 +20,40 @@ export default mixins(
       type: String,
       default: 'div'
     },
-    tile: Boolean
+    tile: Boolean,
+    elevation: [Number, String],
+    ...measurableProps,
+    ...themeProps,
+    ...colorProps
   },
 
-  computed: {
-    classes (): object {
-      return {
-        'v-sheet': true,
-        'v-sheet--tile': this.tile,
-        ...this.themeClasses,
-        ...this.elevationClasses
-      }
-    },
-    styles (): object {
-      return this.measurableStyles
-    }
-  },
+  setup (props, { slots, attrs }) {
+    const { setBackgroundColor } = useColorable(props)
+    const { elevationClasses } = useElevatable(props)
+    const { measurableStyles } = useMeasurable(props)
+    const { themeClasses } = useThemeable(props)
 
-  render (h): VNode {
-    const data = {
-      class: this.classes,
-      style: this.styles,
-      on: this.$listeners
-    }
+    const classes = computed(() => ({
+      'v-sheet': true,
+      'v-sheet--tile': props.tile,
+      ...themeClasses.value,
+      ...elevationClasses.value
+    }))
 
-    return h(
-      this.tag,
-      this.setBackgroundColor(this.color, data),
-      this.$slots.default
-    )
+    return (): VNode => {
+      const colorData = setBackgroundColor(props.color, {
+        class: classes.value,
+        style: measurableStyles.value
+      })
+
+      const { class: colorClass, style: colorStyle, ...rest } = colorData as any
+
+      return h(props.tag, {
+        ...rest,
+        ...attrs,
+        class: [colorClass, attrs.class],
+        style: [colorStyle, attrs.style]
+      }, slots.default?.())
+    }
   }
 })
