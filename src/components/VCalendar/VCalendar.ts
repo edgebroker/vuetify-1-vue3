@@ -1,11 +1,11 @@
 // Styles
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
 // Types
-import { VNode, Component } from 'vue'
+import { defineComponent, h, ref, computed, watch } from 'vue'
 
-// Mixins
-import CalendarBase from './mixins/calendar-base'
+// Composables
+import useCalendarBase from '../../composables/useCalendarBase'
 
 // Util
 import props from './util/props'
@@ -32,42 +32,37 @@ import VCalendarMonthly from './VCalendarMonthly'
 import VCalendarDaily from './VCalendarDaily'
 import VCalendarWeekly from './VCalendarWeekly'
 
-// Types
-interface VCalendarRenderProps {
-  start: VTimestamp
-  end: VTimestamp
-  component: string | Component
-  maxDays: number
+const calendarProps = {
+  ...props.base,
+  ...props.weeks,
+  ...props.intervals,
+  ...props.calendar
 }
 
-/* @vue/component */
-export default CalendarBase.extend({
+export default defineComponent({
   name: 'v-calendar',
 
-  props: {
-    ...props.calendar,
-    ...props.weeks,
-    ...props.intervals
-  },
+  props: calendarProps,
 
-  data: () => ({
-    lastStart: null as VTimestamp | null,
-    lastEnd: null as VTimestamp | null
-  }),
+  setup (props, { slots, emit, expose }) {
+    const base = useCalendarBase(props, { emit })
+    const calendarRef = ref()
+    const lastStart = ref<VTimestamp | null>(null)
+    const lastEnd = ref<VTimestamp | null>(null)
 
-  computed: {
-    parsedValue (): VTimestamp {
-      return parseTimestamp(this.value) ||
-        this.parsedStart ||
-        this.times.today
-    },
-    renderProps (): VCalendarRenderProps {
-      const around = this.parsedValue
+    const parsedValue = computed(() => {
+      return parseTimestamp(props.value) ||
+        base.parsedStart.value ||
+        base.times.value.today
+    })
+
+    const renderProps = computed(() => {
+      const around = parsedValue.value
       let component: any = 'div'
-      let maxDays = this.maxDays
+      let maxDays = props.maxDays
       let start = around
       let end = around
-      switch (this.type) {
+      switch (props.type) {
         case 'month':
           component = VCalendarMonthly
           start = getStartOfMonth(around)
@@ -75,8 +70,8 @@ export default CalendarBase.extend({
           break
         case 'week':
           component = VCalendarDaily
-          start = this.getStartOfWeek(around)
-          end = this.getEndOfWeek(around)
+          start = base.getStartOfWeek(around)
+          end = base.getEndOfWeek(around)
           maxDays = 7
           break
         case 'day':
@@ -91,42 +86,38 @@ export default CalendarBase.extend({
           break
         case 'custom-weekly':
           component = VCalendarWeekly
-          start = this.parsedStart || around
-          end = this.parsedEnd
+          start = base.parsedStart.value || around
+          end = base.parsedEnd.value
           break
         case 'custom-daily':
           component = VCalendarDaily
-          start = this.parsedStart || around
-          end = this.parsedEnd
+          start = base.parsedStart.value || around
+          end = base.parsedEnd.value
           break
       }
-
       return { component, start, end, maxDays }
-    }
-  },
+    })
 
-  watch: {
-    renderProps: 'checkChange'
-  },
-
-  methods: {
-    checkChange (): void {
-      const { start, end } = this.renderProps
-      if (start !== this.lastStart || end !== this.lastEnd) {
-        this.lastStart = start
-        this.lastEnd = end
-        this.$emit('change', { start, end })
+    function checkChange () {
+      const { start, end } = renderProps.value
+      if (start !== lastStart.value || end !== lastEnd.value) {
+        lastStart.value = start
+        lastEnd.value = end
+        emit('change', { start, end })
       }
-    },
-    move (amount = 1): void {
-      const moved = copyTimestamp(this.parsedValue)
+    }
+
+    watch(renderProps, checkChange)
+
+    function move (amount = 1) {
+      const moved = copyTimestamp(parsedValue.value)
       const forward = amount > 0
       const mover = forward ? nextDay : prevDay
       const limit = forward ? DAYS_IN_MONTH_MAX : DAY_MIN
       let times = forward ? amount : -amount
 
       while (--times >= 0) {
-        switch (this.type) {
+        switch (props.type) {
           case 'month':
             moved.day = limit
             mover(moved)
@@ -145,66 +136,56 @@ export default CalendarBase.extend({
 
       updateWeekday(moved)
       updateFormatted(moved)
-      updateRelative(moved, this.times.now)
+      updateRelative(moved, base.times.value.now)
 
-      this.$emit('input', moved.date)
-      this.$emit('moved', moved)
-    },
-    next (amount = 1): void {
-      this.move(amount)
-    },
-    prev (amount = 1): void {
-      this.move(-amount)
-    },
-    timeToY (time: VTime, clamp = true): number | false {
-      const c = this.$children[0] as any
-      if (c && c.timeToY) {
-        return c.timeToY(time, clamp)
-      } else {
-        return false
-      }
-    },
-    minutesToPixels (minutes: number): number {
-      const c = this.$children[0] as any
-      if (c && c.minutesToPixels) {
-        return c.minutesToPixels(minutes)
-      } else {
-        return -1
-      }
-    },
-    scrollToTime (time: VTime): boolean {
-      const c = this.$children[0] as any
-      if (c && c.scrollToTime) {
-        return c.scrollToTime(time)
-      } else {
-        return false
-      }
+      emit('input', moved.date)
+      emit('moved', moved)
     }
-  },
 
-  render (h): VNode {
-    const { start, end, maxDays, component } = this.renderProps
+    function next (amount = 1) {
+      move(amount)
+    }
 
-    return h(component, {
-      staticClass: 'v-calendar',
-      props: {
-        ...this.$props,
-        start: start.date,
-        end: end.date,
-        maxDays
-      },
-      on: {
-        ...this.$listeners,
-        'click:date': (day: VTimestamp) => {
-          if (this.$listeners['input']) {
-            this.$emit('input', day.date)
-          }
-          if (this.$listeners['click:date']) {
-            this.$emit('click:date', day)
+    function prev (amount = 1) {
+      move(-amount)
+    }
+
+    function timeToY (time: VTime, clamp = true): number | false {
+      const c: any = calendarRef.value
+      return c && c.timeToY ? c.timeToY(time, clamp) : false
+    }
+
+    function minutesToPixels (minutes: number): number {
+      const c: any = calendarRef.value
+      return c && c.minutesToPixels ? c.minutesToPixels(minutes) : -1
+    }
+
+    function scrollToTime (time: VTime): boolean {
+      const c: any = calendarRef.value
+      return c && c.scrollToTime ? c.scrollToTime(time) : false
+    }
+
+    expose({ timeToY, minutesToPixels, scrollToTime, next, prev, move })
+
+    return () => {
+      const { start, end, maxDays, component } = renderProps.value
+      return h(component, {
+        ref: calendarRef,
+        staticClass: 'v-calendar',
+        props: {
+          ...props,
+          start: start.date,
+          end: end.date,
+          maxDays
+        },
+        on: {
+          'click:date': (day: VTimestamp) => {
+            emit('input', day.date)
+            emit('click:date', day)
           }
         }
-      },
-      scopedSlots: this.$scopedSlots
-    })
+      }, slots)
+    }
   }
 })
+

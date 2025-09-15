@@ -1,22 +1,24 @@
 import { computed, provide, reactive } from 'vue'
 
-export default function useButtonGroup (props = {}) {
-  const state = reactive({
+export default function useButtonGroup (props: any = {}) {
+  const state = reactive<{ items: any[] }>({
     items: []
   })
 
-  function register (item) {
+  function register (item: any) {
     state.items.push(item)
   }
 
-  function unregister (item) {
+  function unregister (item: any) {
     const index = state.items.indexOf(item)
     if (index !== -1) state.items.splice(index, 1)
   }
 
   const activeClass = computed(() => props.activeClass || 'v-btn--active')
 
-  const classes = computed(() => ({ }))
+  const classes = computed(() => ({}))
+
+  const selectedItems = computed(() => state.items.filter(i => i.isActive))
 
   const btnToggle = {
     register,
@@ -30,6 +32,8 @@ export default function useButtonGroup (props = {}) {
     register,
     unregister,
     activeClass,
-    classes
+    classes,
+    items: state.items,
+    selectedItems
   }
 }

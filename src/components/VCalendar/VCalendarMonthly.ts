@@ -1,26 +1,35 @@
 // Styles
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-// Mixins
-import VCalendarWeekly from './VCalendarWeekly'
+// Types
+import { defineComponent, h, computed } from 'vue'
 
 // Util
-import { VTimestamp, parseTimestamp, getStartOfMonth, getEndOfMonth } from './util/timestamp'
+import { parseTimestamp, getStartOfMonth, getEndOfMonth } from './util/timestamp'
+import props from './util/props'
 
-/* @vue/component */
-export default VCalendarWeekly.extend({
+// Components
+import VCalendarWeekly from './VCalendarWeekly'
+
+const monthlyProps = {
+  ...props.base,
+  ...props.weeks
+}
+
+export default defineComponent({
   name: 'v-calendar-monthly',
 
-  computed: {
-    staticClass (): string {
-      return 'v-calendar-monthly v-calendar-weekly'
-    },
-    parsedStart (): VTimestamp {
-      return getStartOfMonth(parseTimestamp(this.start) as VTimestamp)
-    },
-    parsedEnd (): VTimestamp {
-      return getEndOfMonth(parseTimestamp(this.end) as VTimestamp)
-    }
-  }
+  props: monthlyProps,
 
+  setup (props, { slots }) {
+    const parsedStart = computed(() => getStartOfMonth(parseTimestamp(props.start)!))
+    const parsedEnd = computed(() => getEndOfMonth(parseTimestamp(props.end)!))
+
+    return () => h(VCalendarWeekly as any, {
+      ...props,
+      start: parsedStart.value.date,
+      end: parsedEnd.value.date
+    }, slots)
+  }
 })
+
