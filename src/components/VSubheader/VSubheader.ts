@@ -1,32 +1,26 @@
 // Styles
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-// Mixins
-import Themeable from '../../mixins/themeable'
-import mixins from '../../util/mixins'
+// Composables
+import useThemeable, { themeProps } from '../../composables/useThemeable'
 
 // Types
-import { VNode } from 'vue'
+import { defineComponent, h } from 'vue'
 
-export default mixins(
-  Themeable
-  /* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-subheader',
 
   props: {
+    ...themeProps,
     inset: Boolean
   },
 
-  render (h): VNode {
-    return h('div', {
-      staticClass: 'v-subheader',
-      class: {
-        'v-subheader--inset': this.inset,
-        ...this.themeClasses
-      },
-      attrs: this.$attrs,
-      on: this.$listeners
-    }, this.$slots.default)
+  setup (props, { attrs, slots }) {
+    const { themeClasses } = useThemeable(props)
+
+    return () => h('div', {
+      class: ['v-subheader', { 'v-subheader--inset': props.inset }, themeClasses.value],
+      ...attrs
+    }, slots.default?.())
   }
 })

@@ -1,20 +1,17 @@
 // Styles
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-// Mixins
-import Themeable, { functionalThemeClasses } from '../../mixins/themeable'
+// Composables
+import useThemeable, { themeProps } from '../../composables/useThemeable'
 
 // Types
-import { VNode } from 'vue'
-import mixins from '../../util/mixins'
+import { defineComponent, h } from 'vue'
 
-/* @vue/component */
-export default mixins(Themeable).extend({
+export default defineComponent({
   name: 'v-counter',
 
-  functional: true,
-
   props: {
+    ...themeProps,
     value: {
       type: [Number, String],
       default: ''
@@ -22,19 +19,18 @@ export default mixins(Themeable).extend({
     max: [Number, String]
   },
 
-  render (h, ctx): VNode {
-    const { props } = ctx
-    const max = parseInt(props.max, 10)
-    const value = parseInt(props.value, 10)
-    const content = max ? `${value} / ${max}` : String(props.value)
-    const isGreater = max && (value > max)
+  setup (props) {
+    const { themeClasses } = useThemeable(props)
 
-    return h('div', {
-      staticClass: 'v-counter',
-      class: {
-        'error--text': isGreater,
-        ...functionalThemeClasses(ctx)
-      }
-    }, content)
+    return () => {
+      const max = parseInt(props.max as any, 10)
+      const value = parseInt(props.value as any, 10)
+      const content = max ? `${value} / ${max}` : String(props.value)
+      const isGreater = max && (value > max)
+
+      return h('div', {
+        class: ['v-counter', { 'error--text': isGreater }, themeClasses.value]
+      }, content)
+    }
   }
 })
