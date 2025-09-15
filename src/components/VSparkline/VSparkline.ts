@@ -1,14 +1,11 @@
-// Mixins
-import Colorable from '../../mixins/colorable'
+import '@/css/vuetify.css'
 
-// Utilities
-import mixins, { ExtractVue } from '../../util/mixins'
+import useColorable from '../../composables/useColorable'
+
 import { genPoints } from './helpers/core'
 import { genPath } from './helpers/path'
 
-// Types
-import Vue, { VNode } from 'vue'
-import { Prop, PropValidator } from 'vue/types/options'
+import { defineComponent, h, ref, computed, watch, nextTick, getCurrentInstance, PropType } from 'vue'
 
 export type SparklineItem = number | { value: number }
 
@@ -34,24 +31,11 @@ export interface BarText {
   points: Point[]
   boundary: Boundary
   offsetX: number
+  lineWidth: number
 }
 
-interface options extends Vue {
-  $refs: {
-    path: SVGPathElement
-  }
-}
-
-export default mixins<options &
-/* eslint-disable indent */
-  ExtractVue<[
-    typeof Colorable
-  ]>
-/* eslint-enable indent */
->(
-  Colorable
-).extend({
-  name: 'VSparkline',
+export default defineComponent({
+  name: 'v-sparkline',
 
   props: {
     autoDraw: Boolean,
@@ -76,11 +60,11 @@ export default mixins<options &
       default: false
     },
     gradient: {
-      type: Array as Prop<string[]>,
+      type: Array as PropType<string[]>,
       default: () => ([])
     },
     gradientDirection: {
-      type: String as Prop<'top' | 'bottom' | 'left' | 'right'>,
+      type: String as PropType<'top' | 'bottom' | 'left' | 'right'>,
       validator: (val: string) => ['top', 'bottom', 'left', 'right'].includes(val),
       default: 'top'
     },
@@ -89,7 +73,7 @@ export default mixins<options &
       default: 75
     },
     labels: {
-      type: Array as Prop<SparklineItem[]>,
+      type: Array as PropType<SparklineItem[]>,
       default: () => ([])
     },
     lineWidth: {
@@ -106,12 +90,12 @@ export default mixins<options &
     },
     showLabels: Boolean,
     type: {
-      type: String,
+      type: String as PropType<'trend' | 'bar'>,
       default: 'trend',
       validator: (val: string) => ['trend', 'bar'].includes(val)
-    } as PropValidator<'trend' | 'bar'>,
+    },
     value: {
-      type: Array as Prop<SparklineItem[]>,
+      type: Array as PropType<SparklineItem[]>,
       default: () => ([])
     },
     width: {
@@ -124,57 +108,57 @@ export default mixins<options &
     }
   },
 
-  data: () => ({
-    lastLength: 0
-  }),
+  setup (props, { slots }) {
+    const { setTextColor } = useColorable(props)
 
-  computed: {
-    parsedPadding (): number {
-      return Number(this.padding)
-    },
-    parsedWidth (): number {
-      return Number(this.width)
-    },
-    totalBars (): number {
-      return this.value.length
-    },
-    _lineWidth (): number {
-      if (this.autoLineWidth && this.type !== 'trend') {
-        const totalPadding = this.parsedPadding * (this.totalBars + 1)
-        return (this.parsedWidth - totalPadding) / this.totalBars
+    const uid = getCurrentInstance()?.uid ?? 0
+    const lastLength = ref(0)
+    const path = ref<SVGPathElement | null>(null)
+
+    const parsedPadding = computed(() => Number(props.padding))
+    const parsedWidth = computed(() => Number(props.width))
+    const totalBars = computed(() => props.value.length)
+
+    const lineWidth = computed(() => {
+      if (props.autoLineWidth && props.type !== 'trend') {
+        const totalPadding = parsedPadding.value * (totalBars.value + 1)
+        return (parsedWidth.value - totalPadding) / (totalBars.value || 1)
       } else {
-        return Number(this.lineWidth) || 4
+        return Number(props.lineWidth) || 4
       }
-    },
-    boundary (): Boundary {
-      const height = Number(this.height)
+    })
+
+    const boundary = computed<Boundary>(() => {
+      const height = Number(props.height)
 
       return {
-        minX: this.parsedPadding,
-        minY: this.parsedPadding,
-        maxX: this.parsedWidth - this.parsedPadding,
-        maxY: height - this.parsedPadding
+        minX: parsedPadding.value,
+        minY: parsedPadding.value,
+        maxX: parsedWidth.value - parsedPadding.value,
+        maxY: height - parsedPadding.value
       }
-    },
-    hasLabels (): boolean {
-      return Boolean(
-        this.showLabels ||
-        this.labels.length > 0 ||
-        this.$scopedSlots.label
-      )
-    },
-    parsedLabels (): SparklineText[] {
-      const labels = []
-      const points = this.points
-      const len = points.length
+    })
+
+    const hasLabels = computed(() => Boolean(
+      props.showLabels ||
+      props.labels.length > 0 ||
+      slots.label
+    ))
+
+    const points = computed<Point[]>(() => genPoints(props.value.slice(), boundary.value, props.type))
+
+    const parsedLabels = computed<SparklineText[]>(() => {
+      const labels: SparklineText[] = []
+      const pts = points.value
+      const len = pts.length
 
       for (let i = 0; labels.length < len; i++) {
-        const item = points[i]
-        let value = this.labels[i]
+        const item = pts[i]
+        let value: any = props.labels[i]
 
         if (!value) {
-          value = item === Object(item)
-            ? item.value
+          value = (item as any) === Object(item)
+            ? (item as any).value
             : item
         }
 
@@ -185,240 +169,211 @@ export default mixins<options &
       }
 
       return labels
-    },
-    points (): Point[] {
-      return genPoints(this.value.slice(), this.boundary, this.type)
-    },
-    textY (): number {
-      return this.boundary.maxY + 6
-    }
-  },
+    })
 
-  watch: {
-    value: {
-      immediate: true,
-      handler () {
-        this.$nextTick(() => {
-          if (!this.autoDraw || this.type === 'bar') return
+    const textY = computed(() => boundary.value.maxY + 6)
 
-          const path = this.$refs.path
-          const length = path.getTotalLength()
+    watch(() => props.value, () => {
+      nextTick(() => {
+        if (!props.autoDraw || props.type === 'bar') return
+        const el = path.value
+        if (!el) return
 
-          if (!this.fill) {
-            path.style.transition = 'none'
-            path.style.strokeDasharray = length + ' ' + length
-            path.style.strokeDashoffset = Math.abs(length - (this.lastLength || 0)).toString()
-            path.getBoundingClientRect()
-            path.style.transition = `stroke-dashoffset ${this.autoDrawDuration}ms ${this.autoDrawEasing}`
-            path.style.strokeDashoffset = '0'
-          } else {
-            path.style.transformOrigin = 'bottom center'
-            path.style.transition = 'none'
-            path.style.transform = `scaleY(0)`
-            path.getBoundingClientRect()
-            path.style.transition = `transform ${this.autoDrawDuration}ms ${this.autoDrawEasing}`
-            path.style.transform = `scaleY(1)`
-          }
-          this.lastLength = length
-        })
-      }
-    }
-  },
+        const length = el.getTotalLength()
 
-  methods: {
-    genGradient () {
-      const gradientDirection = this.gradientDirection
-      const gradient = this.gradient.slice()
+        if (!props.fill) {
+          el.style.transition = 'none'
+          el.style.strokeDasharray = `${length} ${length}`
+          el.style.strokeDashoffset = Math.abs(length - (lastLength.value || 0)).toString()
+          el.getBoundingClientRect()
+          el.style.transition = `stroke-dashoffset ${props.autoDrawDuration}ms ${props.autoDrawEasing}`
+          el.style.strokeDashoffset = '0'
+        } else {
+          el.style.transformOrigin = 'bottom center'
+          el.style.transition = 'none'
+          el.style.transform = 'scaleY(0)'
+          el.getBoundingClientRect()
+          el.style.transition = `transform ${props.autoDrawDuration}ms ${props.autoDrawEasing}`
+          el.style.transform = 'scaleY(1)'
+        }
 
-      // Pushes empty string to force
-      // a fallback to currentColor
+        lastLength.value = length
+      })
+    }, { immediate: true, deep: true })
+
+    function genGradient () {
+      const gradientDirection = props.gradientDirection
+      const gradient = props.gradient.slice()
+
       if (!gradient.length) gradient.push('')
 
       const len = Math.max(gradient.length - 1, 1)
       const stops = gradient.reverse().map((color, index) =>
-        this.$createElement('stop', {
-          attrs: {
-            offset: index / len,
-            'stop-color': color || this.color || 'currentColor'
-          }
+        h('stop', {
+          offset: index / len,
+          'stop-color': color || props.color || 'currentColor'
         })
       )
 
-      return this.$createElement('defs', [
-        this.$createElement('linearGradient', {
-          attrs: {
-            id: this._uid,
-            x1: +(gradientDirection === 'left'),
-            y1: +(gradientDirection === 'top'),
-            x2: +(gradientDirection === 'right'),
-            y2: +(gradientDirection === 'bottom')
-          }
+      return h('defs', [
+        h('linearGradient', {
+          id: String(uid),
+          x1: Number(gradientDirection === 'left'),
+          y1: Number(gradientDirection === 'top'),
+          x2: Number(gradientDirection === 'right'),
+          y2: Number(gradientDirection === 'bottom')
         }, stops)
       ])
-    },
-    genG (children: VNode[]) {
-      return this.$createElement('g', {
+    }
+
+    function genG (children) {
+      return h('g', {
         style: {
           fontSize: '8',
           textAnchor: 'middle',
           dominantBaseline: 'mathematical',
-          fill: this.color || 'currentColor'
+          fill: props.color || 'currentColor'
         }
       }, children)
-    },
-    genLabels () {
-      if (!this.hasLabels) return undefined
+    }
 
-      return this.genG(this.parsedLabels.map(this.genText))
-    },
-    genPath () {
-      const radius = this.smooth === true ? 8 : Number(this.smooth)
+    function genLabels () {
+      if (!hasLabels.value) return undefined
 
-      return this.$createElement('path', {
-        attrs: {
-          id: this._uid,
-          d: genPath(this.points.slice(), radius, this.fill, Number(this.height)),
-          fill: this.fill ? `url(#${this._uid})` : 'none',
-          stroke: this.fill ? 'none' : `url(#${this._uid})`
-        },
-        ref: 'path'
+      return genG(parsedLabels.value.map(genText))
+    }
+
+    function genPathNode () {
+      const radius = props.smooth === true ? 8 : Number(props.smooth)
+
+      return h('path', {
+        id: String(uid),
+        d: genPath(points.value.slice(), radius, props.fill, Number(props.height)),
+        fill: props.fill ? `url(#${uid})` : 'none',
+        stroke: props.fill ? 'none' : `url(#${uid})`,
+        ref: path
       })
-    },
-    genText (item: SparklineText, index: number) {
-      const children = this.$scopedSlots.label
-        ? this.$scopedSlots.label({ index, value: item.value })
-        : item.value
+    }
 
-      return this.$createElement('text', {
-        attrs: {
-          x: item.x,
-          y: this.textY
+    function genText (item: SparklineText, index: number) {
+      const slot = slots.label?.({ index, value: item.value })
+      const children = slot ?? [item.value]
+
+      return h('text', {
+        x: item.x,
+        y: textY.value
+      }, children)
+    }
+
+    function genClipPath (clipPoints: Point[], offsetX: number, width: number, id: string) {
+      const { maxY } = boundary.value
+      const rounding = typeof props.smooth === 'number'
+        ? Number(props.smooth)
+        : props.smooth ? 2 : 0
+
+      return h('clipPath', { id: `${id}-clip` }, clipPoints.map(item => {
+        const children = [] as any[]
+
+        if (props.autoDraw) {
+          children.push(h('animate', {
+            attributeName: 'height',
+            from: 0,
+            to: maxY - item.y,
+            dur: `${props.autoDrawDuration}ms`,
+            fill: 'freeze'
+          }))
         }
-      }, [children])
-    },
-    genBar () {
-      if (!this.value || this.totalBars < 2) return undefined as never
-      const { width, height, parsedPadding, _lineWidth } = this
-      const viewWidth = width || this.totalBars * parsedPadding * 2
-      const viewHeight = height || 75
-      const boundary: Boundary = {
-        minX: parsedPadding,
-        minY: parsedPadding,
-        maxX: Number(viewWidth) - parsedPadding,
-        maxY: Number(viewHeight) - parsedPadding
-      }
-      const props = {
-        ...this.$props
-      }
 
-      props.points = genPoints(this.value, boundary, this.type)
-
-      const totalWidth = boundary.maxX / (props.points.length - 1)
-
-      props.boundary = boundary
-      props.lineWidth = _lineWidth || (totalWidth - Number(parsedPadding || 5))
-      props.offsetX = 0
-      if (!this.autoLineWidth) {
-        props.offsetX = ((boundary.maxX / this.totalBars) / 2) - boundary.minX
-      }
-
-      return this.$createElement('svg', {
-        attrs: {
-          width: '100%',
-          height: '25%',
-          viewBox: `0 0 ${viewWidth} ${viewHeight}`
-        }
-      }, [
-        this.genGradient(),
-        this.genClipPath(props.offsetX, props.lineWidth, 'sparkline-bar-' + this._uid),
-        this.hasLabels ? this.genBarLabels(props as BarText) : undefined as never,
-        this.$createElement('g', {
-          attrs: {
-            transform: `scale(1,-1) translate(0,-${boundary.maxY})`,
-            'clip-path': `url(#sparkline-bar-${this._uid}-clip)`,
-            fill: `url(#${this._uid})`
-          }
-        }, [
-          this.$createElement('rect', {
-            attrs: {
-              x: 0,
-              y: 0,
-              width: viewWidth,
-              height: viewHeight
-            }
-          })
-        ])
-      ])
-    },
-    genClipPath (offsetX: number, lineWidth: number, id: string) {
-      const { maxY } = this.boundary
-      const rounding = typeof this.smooth === 'number'
-        ? this.smooth
-        : this.smooth ? 2 : 0
-
-      return this.$createElement('clipPath', {
-        attrs: {
-          id: `${id}-clip`
-        }
-      }, this.points.map(item => {
-        return this.$createElement('rect', {
-          attrs: {
-            x: item.x + offsetX,
-            y: 0,
-            width: lineWidth,
-            height: Math.max(maxY - item.y, 0),
-            rx: rounding,
-            ry: rounding
-          }
-        }, [
-          this.autoDraw ? this.$createElement('animate', {
-            attrs: {
-              attributeName: 'height',
-              from: 0,
-              to: maxY - item.y,
-              dur: `${this.autoDrawDuration}ms`,
-              fill: 'freeze'
-            }
-          }) : undefined as never
-        ])
+        return h('rect', {
+          x: item.x + offsetX,
+          y: 0,
+          width,
+          height: Math.max(maxY - item.y, 0),
+          rx: rounding,
+          ry: rounding
+        }, children)
       }))
-    },
-    genBarLabels (props: BarText): VNode {
-      const offsetX = props.offsetX || 0
+    }
 
-      const children = props.points.map(item => (
-        this.$createElement('text', {
-          attrs: {
-            x: item.x + offsetX + this._lineWidth / 2,
-            y: props.boundary.maxY + (Number(this.labelSize) || 7),
-            'font-size': Number(this.labelSize) || 7
-          }
+    function genBarLabels (data: BarText) {
+      const offsetX = data.offsetX || 0
+
+      const children = data.points.map(item => (
+        h('text', {
+          x: item.x + offsetX + (data.lineWidth || 0) / 2,
+          y: data.boundary.maxY + (Number(props.labelSize) || 7),
+          'font-size': Number(props.labelSize) || 7
         }, item.value.toString())
       ))
 
-      return this.genG(children)
-    },
-    genTrend () {
-      return this.$createElement('svg', this.setTextColor(this.color, {
-        attrs: {
-          'stroke-width': this._lineWidth || 1,
-          width: '100%',
-          height: '25%',
-          viewBox: `0 0 ${this.width} ${this.height}`
-        }
-      }), [
-        this.genGradient(),
-        this.genLabels(),
-        this.genPath()
+      return genG(children)
+    }
+
+    function genBar () {
+      if (!props.value || totalBars.value < 2) return undefined
+
+      const viewWidth = Number(props.width) || (totalBars.value * parsedPadding.value * 2)
+      const viewHeight = Number(props.height) || 75
+      const barBoundary: Boundary = {
+        minX: parsedPadding.value,
+        minY: parsedPadding.value,
+        maxX: Number(viewWidth) - parsedPadding.value,
+        maxY: Number(viewHeight) - parsedPadding.value
+      }
+      const barPoints = genPoints(props.value.slice(), barBoundary, props.type)
+      const totalWidth = barBoundary.maxX / (barPoints.length - 1 || 1)
+      const width = lineWidth.value || (totalWidth - Number(parsedPadding.value || 5))
+      let offsetX = 0
+      if (!props.autoLineWidth) {
+        offsetX = ((barBoundary.maxX / totalBars.value) / 2) - barBoundary.minX
+      }
+
+      return h('svg', {
+        width: '100%',
+        height: '25%',
+        viewBox: `0 0 ${viewWidth} ${viewHeight}`
+      }, [
+        genGradient(),
+        genClipPath(barPoints, offsetX, width, `sparkline-bar-${uid}`),
+        hasLabels.value ? genBarLabels({ points: barPoints, boundary: barBoundary, offsetX, lineWidth: width }) : undefined,
+        h('g', {
+          transform: `scale(1,-1) translate(0,-${barBoundary.maxY})`,
+          'clip-path': `url(#sparkline-bar-${uid}-clip)`,
+          fill: `url(#${uid})`
+        }, [
+          h('rect', {
+            x: 0,
+            y: 0,
+            width: viewWidth,
+            height: viewHeight
+          })
+        ])
       ])
     }
-  },
 
-  render (h): VNode {
-    if (this.totalBars < 2) return undefined as never
+    function genTrend () {
+      const data = setTextColor(props.color, {})
 
-    return this.type === 'trend'
-      ? this.genTrend()
-      : this.genBar()
+      return h('svg', {
+        class: data.class,
+        style: data.style,
+        'stroke-width': lineWidth.value || 1,
+        width: '100%',
+        height: '25%',
+        viewBox: `0 0 ${props.width} ${props.height}`
+      }, [
+        genGradient(),
+        genLabels(),
+        genPathNode()
+      ])
+    }
+
+    return () => {
+      if (totalBars.value < 2) return undefined as any
+
+      return props.type === 'trend'
+        ? genTrend()
+        : genBar()
+    }
   }
 })

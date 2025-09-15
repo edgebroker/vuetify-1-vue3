@@ -1,92 +1,98 @@
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-import Colorable from '../../mixins/colorable'
-import Toggleable from '../../mixins/toggleable'
-import { factory as PositionableFactory } from '../../mixins/positionable'
+import useColorable, { colorProps } from '../../composables/useColorable'
+import useToggleable from '../../composables/useToggleable'
+import usePositionable, { positionPropsFactory } from '../../composables/usePositionable'
 
-import mixins from '../../util/mixins'
-import { VNode } from 'vue'
+import { defineComponent, h, computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 
-export default mixins(
-  Colorable,
-  Toggleable,
-  PositionableFactory(['absolute', 'top', 'bottom', 'left', 'right'])
-/* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-snackbar',
 
   props: {
     autoHeight: Boolean,
     multiLine: Boolean,
-    // TODO: change this to closeDelay to match other API in delayable.js
     timeout: {
       type: Number,
       default: 6000
     },
-    vertical: Boolean
+    vertical: Boolean,
+    value: {
+      type: Boolean,
+      default: false
+    },
+    ...colorProps,
+    ...positionPropsFactory(['absolute', 'top', 'bottom', 'left', 'right'])
   },
 
-  data () {
-    return {
-      activeTimeout: -1
+  setup (props, { slots, attrs, emit }) {
+    const { setBackgroundColor } = useColorable(props)
+    const { isActive } = useToggleable(props, emit)
+    const { positionClasses } = usePositionable(props, ['absolute', 'top', 'bottom', 'left', 'right'])
+
+    const activeTimeout = ref<number>(-1)
+
+    function clearActiveTimeout () {
+      window.clearTimeout(activeTimeout.value)
+      activeTimeout.value = -1
     }
-  },
 
-  computed: {
-    classes (): object {
-      return {
-        'v-snack--active': this.isActive,
-        'v-snack--absolute': this.absolute,
-        'v-snack--auto-height': this.autoHeight,
-        'v-snack--bottom': this.bottom || !this.top,
-        'v-snack--left': this.left,
-        'v-snack--multi-line': this.multiLine && !this.vertical,
-        'v-snack--right': this.right,
-        'v-snack--top': this.top,
-        'v-snack--vertical': this.vertical
+    function setActiveTimeout () {
+      clearActiveTimeout()
+
+      if (isActive.value && props.timeout) {
+        activeTimeout.value = window.setTimeout(() => {
+          isActive.value = false
+        }, props.timeout)
       }
     }
-  },
 
-  watch: {
-    isActive () {
-      this.setTimeout()
-    }
-  },
+    watch(isActive, () => {
+      setActiveTimeout()
+    })
 
-  mounted () {
-    this.setTimeout()
-  },
+    watch(() => props.timeout, () => {
+      if (isActive.value) setActiveTimeout()
+    })
 
-  methods: {
-    setTimeout () {
-      window.clearTimeout(this.activeTimeout)
+    onMounted(() => {
+      setActiveTimeout()
+    })
 
-      if (this.isActive && this.timeout) {
-        this.activeTimeout = window.setTimeout(() => {
-          this.isActive = false
-        }, this.timeout)
-      }
-    }
-  },
+    onBeforeUnmount(() => {
+      clearActiveTimeout()
+    })
 
-  render (h): VNode {
-    return h('transition', {
-      attrs: { name: 'v-snack-transition' }
-    }, this.isActive && [
-      h('div', {
-        staticClass: 'v-snack',
-        class: this.classes,
-        on: this.$listeners
+    const classes = computed(() => ({
+      'v-snack--active': isActive.value,
+      'v-snack--absolute': positionClasses.value.absolute,
+      'v-snack--auto-height': props.autoHeight,
+      'v-snack--bottom': props.bottom || !props.top,
+      'v-snack--left': props.left,
+      'v-snack--multi-line': props.multiLine && !props.vertical,
+      'v-snack--right': props.right,
+      'v-snack--top': props.top,
+      'v-snack--vertical': props.vertical
+    }))
+
+    return () => {
+      const { class: classAttr, style, ...restAttrs } = attrs as any
+
+      const snackbar = h('div', {
+        class: ['v-snack', classes.value, classAttr],
+        style,
+        ...restAttrs
       }, [
-        h('div', this.setBackgroundColor(this.color, {
-          staticClass: 'v-snack__wrapper'
+        h('div', setBackgroundColor(props.color, {
+          class: 'v-snack__wrapper'
         }), [
-          h('div', {
-            staticClass: 'v-snack__content'
-          }, this.$slots.default)
+          h('div', { class: 'v-snack__content' }, slots.default?.())
         ])
       ])
-    ])
+
+      return h('transition', { name: 'v-snack-transition' }, {
+        default: () => (isActive.value ? [snackbar] : [])
+      })
+    }
   }
 })

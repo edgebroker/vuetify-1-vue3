@@ -1,45 +1,26 @@
-// Components
-import {
-  VTabTransition,
-  VTabReverseTransition
-} from '../transitions'
+import { VTabTransition, VTabReverseTransition } from '../transitions'
 
-// Mixins
-import { Registrable, inject as RegistrableInject } from '../../mixins/registrable'
+import useRegistrableInject from '../../composables/useRegistrableInject'
 
-// Helpers
 import { convertToUnit } from '../../util/helpers'
 
-// Util
-import mixins, { ExtractVue } from '../../util/mixins'
+import {
+  defineComponent,
+  h,
+  ref,
+  computed,
+  getCurrentInstance,
+  onMounted,
+  onBeforeUnmount,
+  withDirectives,
+  vShow,
+  watch,
+  inject,
+  isRef
+} from 'vue'
 
-// Types
-import Vue, { VNode, FunctionalComponentOptions, VNodeData } from 'vue'
-
-interface options extends Vue {
-  $refs: {
-    wrapper: HTMLElement
-  }
-  isVerticalProvided: boolean
-}
-
-export default mixins<options &
-/* eslint-disable indent */
-  ExtractVue<[
-    Registrable<'stepper'>
-  ]>
-/* eslint-enable indent */
->(
-  RegistrableInject('stepper', 'v-stepper-content', 'v-stepper')
-/* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-stepper-content',
-
-  inject: {
-    isVerticalProvided: {
-      from: 'isVertical'
-    }
-  },
 
   props: {
     step: {
@@ -48,129 +29,132 @@ export default mixins<options &
     }
   },
 
-  data () {
-    return {
-      height: 0 as number | string,
-      // Must be null to allow
-      // previous comparison
-      isActive: null as boolean | null,
-      isReverse: false,
-      isVertical: this.isVerticalProvided
+  setup (props, { slots, attrs, expose }) {
+    const stepper = useRegistrableInject('stepper', 'v-stepper-content', 'v-stepper')
+    const injectedVertical = inject<any>('isVertical', false)
+
+    const height = ref<number | string>(0)
+    const isActive = ref<boolean | null>(null)
+    const isReverse = ref(false)
+    const wrapper = ref<HTMLElement | null>(null)
+
+    const verticalSource = isRef(injectedVertical) ? injectedVertical : undefined
+    const isVertical = ref<boolean>(verticalSource ? !!verticalSource.value : !!injectedVertical)
+
+    if (verticalSource) {
+      watch(verticalSource, val => { isVertical.value = !!val }, { immediate: true })
     }
-  },
 
-  computed: {
-    classes (): object {
-      return {
-        'v-stepper__content': true
-      }
-    },
-    computedTransition (): FunctionalComponentOptions {
-      return this.isReverse
-        ? VTabReverseTransition
-        : VTabTransition
-    },
-    styles (): object {
-      if (!this.isVertical) return {}
+    if (!isVertical.value) height.value = 'auto'
+
+    const wrapperClasses = computed(() => ({
+      'v-stepper__wrapper': true
+    }))
+
+    const styles = computed(() => {
+      if (!isVertical.value) return {}
 
       return {
-        height: convertToUnit(this.height)
+        height: convertToUnit(height.value)
       }
-    },
-    wrapperClasses (): object {
-      return {
-        'v-stepper__wrapper': true
-      }
+    })
+
+    const computedTransition = computed(() => isReverse.value ? VTabReverseTransition : VTabTransition)
+
+    const vm = getCurrentInstance()
+
+    function onTransition (e: TransitionEvent) {
+      if (!isActive.value || e.propertyName !== 'height') return
+
+      height.value = 'auto'
     }
-  },
 
-  watch: {
-    isActive (current, previous) {
-      // If active and the previous state
-      // was null, is just booting up
+    function enter () {
+      let scrollHeight = 0
+
+      requestAnimationFrame(() => {
+        scrollHeight = wrapper.value ? wrapper.value.scrollHeight : 0
+      })
+
+      height.value = 0
+
+      setTimeout(() => {
+        if (isActive.value) height.value = scrollHeight || 'auto'
+      }, 450)
+    }
+
+    function leave () {
+      if (!wrapper.value) return
+
+      height.value = wrapper.value.clientHeight
+      setTimeout(() => { height.value = 0 }, 10)
+    }
+
+    function toggle (step: string | number, reverse: boolean) {
+      const stringStep = step != null ? step.toString() : ''
+      isActive.value = stringStep === props.step.toString()
+      isReverse.value = reverse
+    }
+
+    function setVertical (val: boolean) {
+      isVertical.value = !!val
+      if (!isVertical.value) height.value = 'auto'
+    }
+
+    watch(isActive, (current, previous) => {
       if (current && previous == null) {
-        this.height = 'auto'
+        height.value = 'auto'
         return
       }
 
-      if (!this.isVertical) return
+      if (!isVertical.value) return
 
-      if (this.isActive) this.enter()
-      else this.leave()
+      if (isActive.value) enter()
+      else leave()
+    })
+
+    onMounted(() => {
+      wrapper.value && wrapper.value.addEventListener('transitionend', onTransition, false)
+      stepper && stepper.register && stepper.register(vm?.proxy)
+    })
+
+    onBeforeUnmount(() => {
+      wrapper.value && wrapper.value.removeEventListener('transitionend', onTransition, false)
+      stepper && stepper.unregister && stepper.unregister(vm?.proxy)
+    })
+
+    expose({ toggle, setVertical })
+
+    return () => {
+      const attrsObj = attrs as Record<string, any>
+      const classAttr = attrsObj.class
+      const style = attrsObj.style
+      const listeners: Record<string, any> = {}
+      const restAttrs: Record<string, any> = {}
+
+      for (const key in attrsObj) {
+        if (key === 'class' || key === 'style') continue
+        if (key.startsWith('on')) listeners[key] = attrsObj[key]
+        else restAttrs[key] = attrsObj[key]
+      }
+
+      const wrapperNode = h('div', {
+        class: ['v-stepper__wrapper', wrapperClasses.value],
+        style: styles.value,
+        ref: wrapper
+      }, slots.default?.())
+
+      let contentNode = h('div', {
+        class: ['v-stepper__content', classAttr],
+        style,
+        ...restAttrs
+      }, [wrapperNode])
+
+      if (!isVertical.value) {
+        contentNode = withDirectives(contentNode, [[vShow, !!isActive.value]])
+      }
+
+      return h(computedTransition.value, listeners, { default: () => [contentNode] })
     }
-  },
-
-  mounted () {
-    this.$refs.wrapper.addEventListener(
-      'transitionend',
-      this.onTransition,
-      false
-    )
-    this.stepper && this.stepper.register(this)
-  },
-
-  beforeDestroy () {
-    this.$refs.wrapper.removeEventListener(
-      'transitionend',
-      this.onTransition,
-      false
-    )
-    this.stepper && this.stepper.unregister(this)
-  },
-
-  methods: {
-    onTransition (e: TransitionEvent) {
-      if (!this.isActive ||
-        e.propertyName !== 'height'
-      ) return
-
-      this.height = 'auto'
-    },
-    enter () {
-      let scrollHeight = 0
-
-      // Render bug with height
-      requestAnimationFrame(() => {
-        scrollHeight = this.$refs.wrapper.scrollHeight
-      })
-
-      this.height = 0
-
-      // Give the collapsing element time to collapse
-      setTimeout(() => this.isActive && (this.height = (scrollHeight || 'auto')), 450)
-    },
-    leave () {
-      this.height = this.$refs.wrapper.clientHeight
-      setTimeout(() => (this.height = 0), 10)
-    },
-    toggle (step: string | number, reverse: boolean) {
-      this.isActive = step.toString() === this.step.toString()
-      this.isReverse = reverse
-    }
-  },
-
-  render (h): VNode {
-    const contentData: VNodeData = {
-      'class': this.classes
-    }
-    const wrapperData = {
-      'class': this.wrapperClasses,
-      style: this.styles,
-      ref: 'wrapper'
-    }
-
-    if (!this.isVertical) {
-      contentData.directives = [{
-        name: 'show',
-        value: this.isActive
-      }]
-    }
-
-    const wrapper = h('div', wrapperData, [this.$slots.default])
-    const content = h('div', contentData, [wrapper])
-
-    return h(this.computedTransition, {
-      on: this.$listeners
-    }, [content])
   }
 })
