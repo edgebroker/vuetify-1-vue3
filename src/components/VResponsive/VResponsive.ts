@@ -1,57 +1,51 @@
-import "@/css/vuetify.css"
+// Styles
+import '@/css/vuetify.css'
 
-// Mixins
-import Measurable, { NumberOrNumberString } from '../../mixins/measurable'
+// Composables
+import useMeasurable, { measurableProps } from '../../composables/useMeasurable'
 
 // Types
-import { VNode } from 'vue'
+import { computed, defineComponent, h, PropType } from 'vue'
 
-// Utils
-import mixins from '../../util/mixins'
-
-/* @vue/component */
-export default mixins(Measurable).extend({
+export default defineComponent({
   name: 'v-responsive',
 
   props: {
-    aspectRatio: [String, Number] as NumberOrNumberString
+    ...measurableProps,
+    aspectRatio: [String, Number] as PropType<string | number>
   },
 
-  computed: {
-    computedAspectRatio (): number {
-      return Number(this.aspectRatio)
-    },
-    aspectStyle (): object | undefined {
-      return this.computedAspectRatio
-        ? { paddingBottom: (1 / this.computedAspectRatio) * 100 + '%' }
+  setup (props, { slots, attrs }) {
+    const { measurableStyles } = useMeasurable(props)
+
+    const computedAspectRatio = computed(() => Number(props.aspectRatio))
+
+    const aspectStyle = computed(() => {
+      return computedAspectRatio.value
+        ? { paddingBottom: (1 / computedAspectRatio.value) * 100 + '%' }
         : undefined
-    },
-    __cachedSizer (): VNode | [] {
-      if (!this.aspectStyle) return []
+    })
 
-      return this.$createElement('div', {
-        style: this.aspectStyle,
-        staticClass: 'v-responsive__sizer'
-      })
+    function genContent () {
+      return h('div', { class: 'v-responsive__content' }, slots.default?.())
     }
-  },
 
-  methods: {
-    genContent (): VNode {
-      return this.$createElement('div', {
-        staticClass: 'v-responsive__content'
-      }, this.$slots.default)
+    return () => {
+      const sizer = aspectStyle.value
+        ? h('div', { style: aspectStyle.value, class: 'v-responsive__sizer' })
+        : null
+
+      const { class: className, style, ...restAttrs } = attrs as any
+
+      return h('div', {
+        ...restAttrs,
+        class: ['v-responsive', className],
+        style: [measurableStyles.value, style]
+      }, [
+        sizer,
+        genContent()
+      ])
     }
-  },
-
-  render (h): VNode {
-    return h('div', {
-      staticClass: 'v-responsive',
-      style: this.measurableStyles,
-      on: this.$listeners
-    }, [
-      this.__cachedSizer,
-      this.genContent()
-    ])
   }
 })
+
