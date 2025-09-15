@@ -1,6 +1,0 @@
-{
-  "props": {
-    "activeClass": "The class used when item is active",
-    "disabled": "Disables the item from changing value from the toggle method"
-  }
-}

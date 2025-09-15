@@ -1,7 +1,0 @@
-<v-dialog v-model="dialog">
-  <v-card>...</v-card>
-</v-dialog>
-
-<v-btn @click.stop="dialog = true">
-  Open Dialog
-</v-btn>
