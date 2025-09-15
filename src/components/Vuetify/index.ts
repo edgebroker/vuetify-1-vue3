@@ -13,7 +13,7 @@ import { consoleWarn, consoleError } from '../../util/console'
 
 // Types
 import { VueConstructor } from 'vue/types'
-import { Vuetify as VuetifyPlugin, VuetifyUseOptions } from 'vuetify/types'
+import { Vuetify as VuetifyPlugin, VuetifyUseOptions } from '../../types'
 
 const Vuetify: VuetifyPlugin = {
   install (Vue, opts = {}) {

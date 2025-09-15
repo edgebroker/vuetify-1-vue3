@@ -1,5 +1,5 @@
 import Vue from 'vue'
-import { VuetifyUseOptions, VuetifyBreakpoint } from 'vuetify/types'
+import { VuetifyUseOptions, VuetifyBreakpoint } from '../../../types'
 
 const BREAKPOINTS_DEFAULTS = {
   thresholds: {

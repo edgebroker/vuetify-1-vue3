@@ -1,4 +1,4 @@
-import { VuetifyUseOptions, VuetifyTheme } from 'vuetify/types'
+import { VuetifyUseOptions, VuetifyTheme } from '../../../types'
 
 /* eslint-disable no-multi-spaces */
 const THEME_DEFAULTS = {
