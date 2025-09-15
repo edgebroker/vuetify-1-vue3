@@ -1,19 +1,19 @@
 import { computed, getCurrentInstance, h, ref, watch, withDirectives, Transition } from 'vue'
 
 // Directives
-import Touch, { TouchWrapper } from '../directives/touch'
+import Touch, { TouchWrapper } from '../../../directives/touch'
 
 // Composables
-import useColorable, { colorProps } from './useColorable'
-import useThemeable, { themeProps } from './useThemeable'
+import useColorable, { colorProps } from '../../../composables/useColorable'
+import useThemeable, { themeProps } from '../../../composables/useThemeable'
 
 // Utils
-import isDateAllowed, { AllowedDateFunction } from '../components/VDatePicker/util/isDateAllowed'
+import isDateAllowed, { AllowedDateFunction } from '../util/isDateAllowed'
 
 // Types
 import type { PropType, VNode, VNodeArrayChildren } from 'vue'
-import type { DatePickerFormatter } from '../components/VDatePicker/util/createNativeLocaleFormatter'
-import type { DateEventColors, DateEventColorValue, DateEvents } from '../components/VDatePicker/VDatePicker'
+import type { DatePickerFormatter } from '../util/createNativeLocaleFormatter'
+import type { DateEventColors, DateEventColorValue, DateEvents } from '../VDatePicker'
 
 type CalculateTableDateFunction = (value: number) => string
 
