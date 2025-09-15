@@ -13,7 +13,7 @@ import Maskable from '../../mixins/maskable'
 import Loadable from '../../mixins/loadable'
 
 // Directives
-import Ripple from '../../directives/ripple'
+import Ripple from '../../../../../src/directives/ripple'
 
 // Utilities
 import {

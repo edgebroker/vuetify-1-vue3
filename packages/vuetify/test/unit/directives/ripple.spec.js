@@ -1,6 +1,6 @@
 import Vue from 'vue'
 import { test } from '@/test'
-import Ripple from '@/directives/ripple'
+import Ripple from '../../../../../src/directives/ripple'
 
 test('VRipple', ({ mount }) => {
   it('Ripple with no value should render element with ripple enabled', () => {

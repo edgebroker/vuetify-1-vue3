@@ -4,7 +4,7 @@ import Toggleable from '../../mixins/toggleable'
 import Positionable from '../../mixins/positionable'
 import Transitionable from '../../mixins/transitionable'
 
-import ClickOutside from '../../directives/click-outside'
+import ClickOutside from '../../../../../src/directives/click-outside'
 
 /* @vue/component */
 export default {

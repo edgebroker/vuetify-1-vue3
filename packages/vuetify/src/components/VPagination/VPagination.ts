@@ -3,7 +3,7 @@ import "@/css/vuetify.css"
 import VIcon from '../VIcon'
 
 // Directives
-import Resize from '../../directives/resize'
+import Resize from '../../../../../src/directives/resize'
 
 // Mixins
 import mixins from '../../util/mixins'

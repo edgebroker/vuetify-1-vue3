@@ -4,7 +4,7 @@ import "@/css/vuetify.css"
 import Selectable from '../../mixins/selectable'
 
 // Directives
-import Touch from '../../directives/touch'
+import Touch from '../../../../../src/directives/touch'
 
 // Components
 import { VFabTransition } from '../transitions'

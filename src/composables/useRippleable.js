@@ -1,5 +1,5 @@
 import { h, withDirectives } from 'vue'
-import Ripple from '../../packages/vuetify/src/directives/ripple'
+import Ripple from '../directives/ripple'
 
 export const rippleableProps = {
   ripple: {

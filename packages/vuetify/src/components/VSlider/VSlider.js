@@ -8,7 +8,7 @@ import { VScaleTransition } from '../transitions'
 import VInput from '../VInput'
 
 // Directives
-import ClickOutside from '../../directives/click-outside'
+import ClickOutside from '../../../../../src/directives/click-outside'
 
 // Utilities
 import {

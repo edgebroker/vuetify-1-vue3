@@ -1,4 +1,4 @@
-import Resize from '@/directives/resize'
+import Resize from '../../../../../src/directives/resize'
 import { test } from '@/test'
 
 test('resize.js', () => {

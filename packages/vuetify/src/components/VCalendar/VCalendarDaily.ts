@@ -5,7 +5,7 @@ import "@/css/vuetify.css"
 import { VNode, VNodeChildren } from 'vue'
 
 // Directives
-import Resize from '../../directives/resize'
+import Resize from '../../../../../src/directives/resize'
 
 // Mixins
 import CalendarWithIntervals from './mixins/calendar-with-intervals'

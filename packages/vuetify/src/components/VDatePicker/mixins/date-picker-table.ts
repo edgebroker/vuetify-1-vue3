@@ -1,7 +1,7 @@
 import "@/css/vuetify.css"
 
 // Directives
-import Touch, { TouchWrapper } from '../../../directives/touch'
+import Touch, { TouchWrapper } from '../../../../../../src/directives/touch'
 
 // Mixins
 import Colorable from '../../../mixins/colorable'

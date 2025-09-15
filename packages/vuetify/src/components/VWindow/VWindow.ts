@@ -5,7 +5,7 @@ import "@/css/vuetify.css"
 import { BaseItemGroup } from '../VItemGroup/VItemGroup'
 
 // Directives
-import Touch from '../../directives/touch'
+import Touch from '../../../../../src/directives/touch'
 
 // Types
 import { VNode, VNodeDirective } from 'vue/types/vnode'

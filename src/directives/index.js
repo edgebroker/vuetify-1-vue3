@@ -9,7 +9,7 @@ export {
   Ripple,
   Resize,
   Scroll,
-  Touch
+  Touch,
 }
 
 export default {
@@ -17,5 +17,5 @@ export default {
   Ripple,
   Resize,
   Scroll,
-  Touch
+  Touch,
 }

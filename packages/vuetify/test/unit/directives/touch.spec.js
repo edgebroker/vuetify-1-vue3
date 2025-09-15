@@ -1,5 +1,5 @@
 import Vue from 'vue'
-import Touch from '@/directives/touch'
+import Touch from '../../../../../src/directives/touch'
 import { test, touch } from '@/test'
 
 test('touch.js', ({ mount }) => {

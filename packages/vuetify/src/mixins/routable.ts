@@ -1,7 +1,7 @@
 import Vue, { VNodeData } from 'vue'
 import { PropValidator } from 'vue/types/options'
 
-import Ripple, { RippleOptions } from '../directives/ripple'
+import Ripple, { RippleOptions } from '../../../../src/directives/ripple'
 
 export default Vue.extend({
   name: 'routable',

@@ -1,12 +1,5 @@
-import { VNodeDirective } from 'vue/types/vnode'
-
-interface ResizeVNodeDirective extends VNodeDirective {
-  value?: () => void
-  options?: boolean | AddEventListenerOptions
-}
-
-function inserted (el: HTMLElement, binding: ResizeVNodeDirective) {
-  const callback = binding.value!
+function inserted (el, binding) {
+  const callback = binding.value
   const options = binding.options || { passive: true }
 
   window.addEventListener('resize', callback, options)
@@ -20,7 +13,7 @@ function inserted (el: HTMLElement, binding: ResizeVNodeDirective) {
   }
 }
 
-function unbind (el: HTMLElement) {
+function unbind (el) {
   if (!el._onResize) return
 
   const { callback, options } = el._onResize
@@ -30,5 +23,5 @@ function unbind (el: HTMLElement) {
 
 export default {
   inserted,
-  unbind
+  unbind,
 }
