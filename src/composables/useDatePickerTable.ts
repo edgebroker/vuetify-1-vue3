@@ -4,7 +4,7 @@ import { computed, getCurrentInstance, h, ref, watch, withDirectives, Transition
 import Touch, { TouchWrapper } from '../directives/touch'
 
 // Composables
-import useColorable, { colorProps, setBackgroundColor } from './useColorable'
+import useColorable, { colorProps } from './useColorable'
 import useThemeable, { themeProps } from './useThemeable'
 
 // Utils
@@ -51,7 +51,7 @@ export const datePickerTableProps = {
 
 export default function useDatePickerTable (props: any, emit: EmitFn) {
   const { themeClasses } = useThemeable(props)
-  const { setBackgroundColor: setBgColor, setTextColor: setTxtColor } = useColorable(props)
+  const { setBackgroundColor, setTextColor } = useColorable(props)
 
   const vm = getCurrentInstance()
   const isRtl = computed(() => Boolean(vm?.proxy?.$vuetify?.rtl))
@@ -133,7 +133,7 @@ export default function useDatePickerTable (props: any, emit: EmitFn) {
     const isAllowed = isDateAllowed(value, props.min, props.max, props.allowedDates)
     const isSelected = value === props.value || (Array.isArray(props.value) && props.value.indexOf(value) !== -1)
     const isCurrent = value === props.current
-    const setColor = isSelected ? setBgColor : setTxtColor
+    const setColor = isSelected ? setBackgroundColor : setTextColor
     const color = (isSelected || isCurrent) && (props.color || 'accent')
 
     const onClick = () => {
@@ -196,9 +196,19 @@ export default function useDatePickerTable (props: any, emit: EmitFn) {
   }
 
   return {
+    themeClasses,
+    setBackgroundColor,
+    setTextColor,
+    isReversing,
+    computedTransition,
     displayedMonth,
     displayedYear,
+    genButtonClasses,
+    getEventColors,
+    genEvents,
     genButton,
+    wheel,
+    touch,
     genTable,
   }
 }
