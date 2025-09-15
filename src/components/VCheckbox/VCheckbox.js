@@ -1,20 +1,20 @@
 // Styles
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
 // Components
 import VIcon from '../VIcon'
-// import { VFadeTransition } from '../transitions'
 
-// Mixins
-import Selectable from '../../mixins/selectable'
+// Composables
+import useSelectable, { selectableProps } from '../../composables/useSelectable'
+import useRippleable, { rippleableProps } from '../../composables/useRippleable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
+import useColorable from '../../composables/useColorable'
 
-/* @vue/component */
-export default {
+// Types
+import { defineComponent, h, ref, computed, watch } from 'vue'
+
+export default defineComponent({
   name: 'v-checkbox',
-
-  mixins: [
-    Selectable
-  ],
 
   props: {
     indeterminate: Boolean,
@@ -29,62 +29,49 @@ export default {
     offIcon: {
       type: String,
       default: '$vuetify.icons.checkboxOff'
-    }
-  },
-
-  data: vm => ({
-    inputIndeterminate: vm.indeterminate
-  }),
-
-  computed: {
-    classes () {
-      return {
-        'v-input--selection-controls': true,
-        'v-input--checkbox': true
-      }
     },
-    computedIcon () {
-      if (this.inputIndeterminate) {
-        return this.indeterminateIcon
-      } else if (this.isActive) {
-        return this.onIcon
-      } else {
-        return this.offIcon
-      }
-    }
+    ...selectableProps,
+    ...rippleableProps,
+    ...themeProps
   },
 
-  watch: {
-    indeterminate (val) {
-      this.inputIndeterminate = val
-    }
-  },
+  setup (props, { attrs, slots, emit }) {
+    const { genInput, genLabel, isActive, computedColor, onChange } = useSelectable(props, { emit })
+    const { genRipple } = useRippleable(props, { onChange })
+    const { setTextColor } = useColorable(props)
+    const { themeClasses } = useThemeable(props)
 
-  methods: {
-    genCheckbox () {
-      return this.$createElement('div', {
-        staticClass: 'v-input--selection-controls__input'
-      }, [
-        this.genInput('checkbox', {
-          ...this.$attrs,
-          'aria-checked': this.inputIndeterminate
-            ? 'mixed'
-            : this.isActive.toString()
+    const inputIndeterminate = ref(props.indeterminate)
+    watch(() => props.indeterminate, val => { inputIndeterminate.value = val })
+
+    const classes = computed(() => ({
+      'v-input--selection-controls': true,
+      'v-input--checkbox': true,
+      ...themeClasses.value
+    }))
+
+    const computedIcon = computed(() => {
+      if (inputIndeterminate.value) return props.indeterminateIcon
+      return isActive.value ? props.onIcon : props.offIcon
+    })
+
+    function genCheckbox () {
+      return h('div', { class: 'v-input--selection-controls__input' }, [
+        genInput('checkbox', {
+          ...attrs,
+          'aria-checked': inputIndeterminate.value ? 'mixed' : String(isActive.value)
         }),
-        this.genRipple(this.setTextColor(this.computedColor)),
-        this.$createElement(VIcon, this.setTextColor(this.computedColor, {
-          props: {
-            dark: this.dark,
-            light: this.light
-          }
-        }), this.computedIcon)
+        genRipple(setTextColor(computedColor.value)),
+        h(VIcon, setTextColor(computedColor.value, {
+          props: { dark: props.dark, light: props.light }
+        }), { default: () => computedIcon.value })
       ])
-    },
-    genDefaultSlot () {
-      return [
-        this.genCheckbox(),
-        this.genLabel()
-      ]
     }
+
+    return () => h('div', { class: classes.value }, [
+      genCheckbox(),
+      genLabel()
+    ])
   }
-}
+})
+
