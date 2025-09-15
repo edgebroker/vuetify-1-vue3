@@ -1,63 +1,47 @@
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-// Component level mixins
-import AppTheme from './mixins/app-theme'
-
-import Themeable from '../../mixins/themeable'
+// Composables
+import useThemeable from '../../composables/useThemeable'
 
 // Directives
 import Resize from '../../directives/resize'
 
-/* @vue/component */
-export default {
+// Types
+import { defineComponent, h, computed, getCurrentInstance, watch, onMounted } from 'vue'
+
+export default defineComponent({
   name: 'v-app',
 
-  directives: {
-    Resize
-  },
-
-  mixins: [
-    AppTheme,
-    Themeable
-  ],
+  directives: { Resize },
 
   props: {
     id: {
       type: String,
       default: 'app'
     },
-    dark: Boolean
+    dark: Boolean,
+    light: Boolean
   },
 
-  computed: {
-    classes () {
-      return {
-        'application--is-rtl': this.$vuetify.rtl,
-        ...this.themeClasses
-      }
+  setup (props, { slots }) {
+    const { themeClasses } = useThemeable(props)
+    const { proxy } = getCurrentInstance()
+
+    const classes = computed(() => ({
+      'application--is-rtl': proxy?.$vuetify.rtl,
+      ...themeClasses.value
+    }))
+
+    watch(() => props.dark, val => { if (proxy) proxy.$vuetify.dark = val })
+    onMounted(() => { if (proxy) proxy.$vuetify.dark = props.dark })
+
+    return () => {
+      const wrapper = h('div', { class: 'application--wrap' }, slots.default?.())
+      return h('div', {
+        class: ['application', classes.value],
+        attrs: { 'data-app': true },
+        id: props.id
+      }, [wrapper])
     }
-  },
-
-  watch: {
-    dark () {
-      this.$vuetify.dark = this.dark
-    }
-  },
-
-  mounted () {
-    this.$vuetify.dark = this.dark
-  },
-
-  render (h) {
-    const data = {
-      staticClass: 'application',
-      'class': this.classes,
-      attrs: { 'data-app': true },
-      domProps: { id: this.id }
-    }
-
-    const wrapper = h('div', { staticClass: 'application--wrap' }, this.$slots.default)
-
-    return h('div', data, [wrapper])
   }
-}
+})
