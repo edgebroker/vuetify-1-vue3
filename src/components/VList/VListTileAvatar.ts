@@ -1,14 +1,9 @@
-// Components
+import { defineComponent, h } from 'vue'
+
 import VAvatar from '../VAvatar'
 
-// Types
-import Vue, { VNode } from 'vue'
-
-/* @vue/component */
-export default Vue.extend({
+export default defineComponent({
   name: 'v-list-tile-avatar',
-
-  functional: true,
 
   props: {
     color: String,
@@ -19,17 +14,12 @@ export default Vue.extend({
     tile: Boolean
   },
 
-  render (h, { data, children, props }): VNode {
-    data.staticClass = (`v-list__tile__avatar ${data.staticClass || ''}`).trim()
-
-    const avatar = h(VAvatar, {
-      props: {
-        color: props.color,
-        size: props.size,
-        tile: props.tile
-      }
-    }, [children])
-
-    return h('div', data, [avatar])
+  setup (props, { slots, attrs }) {
+    return () => {
+      const { class: className, ...rest } = attrs as any
+      const avatar = h(VAvatar, { color: props.color, size: props.size, tile: props.tile }, slots.default?.())
+      return h('div', { class: ['v-list__tile__avatar', className], ...rest }, [avatar])
+    }
   }
 })
+

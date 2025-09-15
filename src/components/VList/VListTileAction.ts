@@ -1,19 +1,16 @@
-// Types
-import Vue, { VNode } from 'vue'
+import { defineComponent, h, Comment } from 'vue'
 
-/* @vue/component */
-export default Vue.extend({
+export default defineComponent({
   name: 'v-list-tile-action',
 
-  functional: true,
-
-  render (h, { data, children = [] }): VNode {
-    data.staticClass = data.staticClass ? `v-list__tile__action ${data.staticClass}` : 'v-list__tile__action'
-    const filteredChild = children.filter(VNode => {
-      return VNode.isComment === false && VNode.text !== ' '
-    })
-    if (filteredChild.length > 1) data.staticClass += ' v-list__tile__action--stack'
-
-    return h('div', data, children)
+  setup (_, { slots, attrs }) {
+    return () => {
+      const { class: className, ...rest } = attrs as any
+      const children = slots.default?.() || []
+      const filtered = children.filter(v => v.type !== Comment && !(typeof v.children === 'string' && v.children.trim() === ''))
+      const classes = ['v-list__tile__action', className]
+      if (filtered.length > 1) classes.push('v-list__tile__action--stack')
+      return h('div', { class: classes, ...rest }, children)
+    }
   }
 })

@@ -1,28 +1,12 @@
-// Mixins
-import Colorable from '../../mixins/colorable'
-import Routable from '../../mixins/routable'
-import Toggleable from '../../mixins/toggleable'
-import Themeable from '../../mixins/themeable'
+import { defineComponent, h, computed } from 'vue'
 
-// Directives
-import Ripple from '../../directives/ripple'
+import useColorable, { colorProps } from '../../composables/useColorable'
+import useRoutable, { routableProps } from '../../composables/useRoutable'
+import useToggleable from '../../composables/useToggleable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
 
-// Types
-import mixins from '../../util/mixins'
-import { VNode } from 'vue'
-
-/* @vue/component */
-export default mixins(
-  Colorable,
-  Routable,
-  Toggleable,
-  Themeable
-).extend({
+export default defineComponent({
   name: 'v-list-tile',
-
-  directives: {
-    Ripple
-  },
 
   inheritAttrs: false,
 
@@ -33,57 +17,62 @@ export default mixins(
     },
     avatar: Boolean,
     inactive: Boolean,
-    tag: String
+    tag: String,
+    value: {
+      type: Boolean,
+      default: false
+    },
+    ...routableProps,
+    ...colorProps,
+    ...themeProps
   },
 
-  data: () => ({
-    proxyClass: 'v-list__tile--active'
-  }),
+  setup (props, { slots, attrs, emit }) {
+    const { setTextColor } = useColorable(props)
+    const { generateRouteLink } = useRoutable(props, { attrs, emit })
+    const { isActive } = useToggleable(props, emit)
+    const { themeClasses } = useThemeable(props)
 
-  computed: {
-    listClasses (): object | undefined {
-      return this.disabled
-        ? { 'v-list--disabled': true }
-        : undefined
-    },
-    classes (): object {
-      return {
-        'v-list__tile': true,
-        'v-list__tile--link': this.isLink && !this.inactive,
-        'v-list__tile--avatar': this.avatar,
-        'v-list__tile--disabled': this.disabled,
-        'v-list__tile--active': !this.to && this.isActive,
-        ...this.themeClasses,
-        [this.activeClass]: this.isActive
-      }
-    },
-    isLink (): boolean {
-      const hasClick = this.$listeners && (this.$listeners.click || this.$listeners['!click'])
+    const listClasses = computed(() => props.disabled
+      ? { 'v-list--disabled': true }
+      : undefined)
 
+    const isLink = computed(() => {
+      const hasClick = attrs.on && ((attrs.on as any).click || (attrs.on as any)['!click'])
       return Boolean(
-        this.href ||
-        this.to ||
+        props.href ||
+        props.to ||
         hasClick
       )
-    }
-  },
+    })
 
-  render (h): VNode {
-    const isRouteLink = !this.inactive && this.isLink
-    const { tag, data } = isRouteLink ? this.generateRouteLink(this.classes) : {
-      tag: this.tag || 'div',
-      data: {
-        class: this.classes
-      }
-    }
+    const classes = computed(() => ({
+      'v-list__tile': true,
+      'v-list__tile--link': isLink.value && !props.inactive,
+      'v-list__tile--avatar': props.avatar,
+      'v-list__tile--disabled': props.disabled,
+      'v-list__tile--active': !props.to && isActive.value,
+      ...themeClasses.value,
+      [props.activeClass]: isActive.value
+    }))
 
-    data.attrs = Object.assign({}, data.attrs, this.$attrs)
-    return h('div', this.setTextColor(!this.disabled && this.isActive && this.color, {
-      class: this.listClasses,
-      attrs: {
-        disabled: this.disabled,
-        role: 'listitem'
+    return () => {
+      const isRouteLink = !props.inactive && isLink.value
+      const { tag, data } = isRouteLink ? generateRouteLink(classes.value) : {
+        tag: props.tag || 'div',
+        data: { class: classes.value }
       }
-    }), [h(tag, data, this.$slots.default)])
+
+      data.attrs = Object.assign({}, data.attrs, attrs)
+
+      return h('div', setTextColor(!props.disabled && isActive.value && props.color, {
+        class: listClasses.value,
+        attrs: {
+          disabled: props.disabled,
+          role: 'listitem'
+        }
+      }), [h(tag, data, slots.default?.())])
+    }
   }
 })
+
