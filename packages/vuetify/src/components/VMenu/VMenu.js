@@ -9,7 +9,7 @@ import Menuable from '../../mixins/menuable.js'
 import Returnable from '../../mixins/returnable'
 import Toggleable from '../../mixins/toggleable'
 import Themeable from '../../mixins/themeable'
-import useDelayable from '../../composables/useDelayable'
+import useDelayable from '../../../../../src/composables/useDelayable'
 
 // Component level mixins
 import Activator from './mixins/menu-activator'

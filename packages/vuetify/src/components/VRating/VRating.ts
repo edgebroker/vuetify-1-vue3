@@ -9,7 +9,7 @@ import Colorable from '../../mixins/colorable'
 import Sizeable from '../../mixins/sizeable'
 import Rippleable from '../../mixins/rippleable'
 import Themeable from '../../mixins/themeable'
-import useDelayable from '../../composables/useDelayable'
+import useDelayable from '../../../../../src/composables/useDelayable'
 
 // Utilities
 import { createRange } from '../../util/helpers'

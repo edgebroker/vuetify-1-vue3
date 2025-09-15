@@ -6,7 +6,7 @@ import Dependent from '../../mixins/dependent'
 import Detachable from '../../mixins/detachable'
 import Menuable from '../../mixins/menuable'
 import Toggleable from '../../mixins/toggleable'
-import useDelayable from '../../composables/useDelayable'
+import useDelayable from '../../../../../src/composables/useDelayable'
 
 // Helpers
 import { convertToUnit, getSlotType } from '../../util/helpers'
