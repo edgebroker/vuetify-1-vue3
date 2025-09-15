@@ -1,23 +1,19 @@
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-// Mixins
-import Colorable from '../../mixins/colorable'
+// Composables
+import useColorable, { colorProps } from '../../composables/useColorable'
+
+// Utilities
 import { convertToUnit } from '../../util/helpers'
 
 // Types
-import { VNode } from 'vue'
-import mixins from '../../util/mixins'
+import { defineComponent, h } from 'vue'
 
-/* @vue/component */
-export default mixins(Colorable).extend({
+export default defineComponent({
   name: 'v-avatar',
 
-  functional: true,
-
   props: {
-    // TODO: inherit these
-    color: String,
-
+    ...colorProps,
     size: {
       type: [Number, String],
       default: 48
@@ -25,18 +21,20 @@ export default mixins(Colorable).extend({
     tile: Boolean
   },
 
-  render (h, { data, props, children }): VNode {
-    data.staticClass = (`v-avatar ${data.staticClass || ''}`).trim()
+  setup (props, { slots }) {
+    const { setBackgroundColor } = useColorable(props)
 
-    if (props.tile) data.staticClass += ' v-avatar--tile'
+    return () => {
+      const size = convertToUnit(props.size)
+      const data = {
+        class: ['v-avatar', { 'v-avatar--tile': props.tile }],
+        style: {
+          height: size,
+          width: size
+        }
+      }
 
-    const size = convertToUnit(props.size)
-    data.style = {
-      height: size,
-      width: size,
-      ...data.style as object
+      return h('div', setBackgroundColor(props.color, data), slots.default?.())
     }
-
-    return h('div', Colorable.options.methods.setBackgroundColor(props.color, data), children)
   }
 })

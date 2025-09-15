@@ -1,24 +1,21 @@
 // Styles
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
-// Mixins
-import Colorable from '../../mixins/colorable'
-import Themeable, { functionalThemeClasses } from '../../mixins/themeable'
+// Composables
+import useColorable from '../../composables/useColorable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
 
-// Types
-import { VNode } from 'vue'
-import mixins from '../../util/mixins'
-
-// Helpers
+// Utilities
 import { convertToUnit } from '../../util/helpers'
 
-/* @vue/component */
-export default mixins(Themeable).extend({
+// Types
+import { defineComponent, h } from 'vue'
+
+export default defineComponent({
   name: 'v-label',
 
-  functional: true,
-
   props: {
+    ...themeProps,
     absolute: Boolean,
     color: {
       type: String,
@@ -38,27 +35,28 @@ export default mixins(Themeable).extend({
     value: Boolean
   },
 
-  render (h, ctx): VNode {
-    const { children, listeners, props } = ctx
-    const data = {
-      staticClass: 'v-label',
-      'class': {
-        'v-label--active': props.value,
-        'v-label--is-disabled': props.disabled,
-        ...functionalThemeClasses(ctx)
-      },
-      attrs: {
-        for: props.for,
-        'aria-hidden': !props.for
-      },
-      on: listeners,
-      style: {
-        left: convertToUnit(props.left),
-        right: convertToUnit(props.right),
-        position: props.absolute ? 'absolute' : 'relative'
-      }
-    }
+  setup (props, { slots, attrs }) {
+    const { setTextColor } = useColorable(props)
+    const { themeClasses } = useThemeable(props)
 
-    return h('label', Colorable.options.methods.setTextColor(props.focused && props.color, data), children)
+    return () => {
+      const data = {
+        class: ['v-label', {
+          'v-label--active': props.value,
+          'v-label--is-disabled': props.disabled,
+          ...themeClasses.value
+        }],
+        style: {
+          left: convertToUnit(props.left),
+          right: convertToUnit(props.right),
+          position: props.absolute ? 'absolute' : 'relative'
+        },
+        for: props.for,
+        'aria-hidden': !props.for,
+        ...attrs
+      }
+
+      return h('label', setTextColor(props.focused && props.color, data), slots.default?.())
+    }
   }
 })
