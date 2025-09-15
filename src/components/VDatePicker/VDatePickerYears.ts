@@ -1,35 +1,22 @@
-import "@/css/vuetify.css"
-
-// Mixins
-import Colorable from '../../mixins/colorable'
+import '@/css/vuetify.css'
 
 // Utils
 import { createNativeLocaleFormatter } from './util'
-import mixins, { ExtractVue } from '../../util/mixins'
+
+// Composables
+import useColorable, { colorProps } from '../../composables/useColorable'
 
 // Types
-import Vue, { VNode } from 'vue'
+import { defineComponent, h, ref, computed, onMounted } from 'vue'
+import { PropType } from 'vue'
 import { DatePickerFormatter } from './util/createNativeLocaleFormatter'
-import { PropValidator } from 'vue/types/options'
 
-interface options extends Vue {
-  $el: HTMLElement
-}
-
-export default mixins<options &
-/* eslint-disable indent */
-  ExtractVue<[
-    typeof Colorable
-  ]>
-/* eslint-enable indent */
->(
-  Colorable
-/* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-date-picker-years',
 
   props: {
-    format: Function as PropValidator<DatePickerFormatter | undefined>,
+    ...colorProps,
+    format: Function as PropType<DatePickerFormatter | undefined>,
     locale: {
       type: String,
       default: 'en-us'
@@ -40,62 +27,54 @@ export default mixins<options &
     value: [Number, String]
   },
 
-  data () {
-    return {
-      defaultColor: 'primary'
-    }
-  },
+  setup (props, { emit }) {
+    const years = ref<HTMLElement | null>(null)
+    const { setTextColor } = useColorable(props)
 
-  computed: {
-    formatter (): DatePickerFormatter {
-      return this.format || createNativeLocaleFormatter(this.locale, { year: 'numeric', timeZone: 'UTC' }, { length: 4 })
-    }
-  },
+    const formatter = computed(() =>
+      props.format || createNativeLocaleFormatter(props.locale, { year: 'numeric', timeZone: 'UTC' }, { length: 4 })
+    )
 
-  mounted () {
-    setTimeout(() => {
-      const activeItem = this.$el.getElementsByClassName('active')[0]
-      if (activeItem) {
-        this.$el.scrollTop = activeItem.offsetTop - this.$el.offsetHeight / 2 + activeItem.offsetHeight / 2
-      } else {
-        this.$el.scrollTop = this.$el.scrollHeight / 2 - this.$el.offsetHeight / 2
-      }
-    })
-  },
-
-  methods: {
-    genYearItem (year: number): VNode {
-      const formatted = this.formatter(`${year}`)
-      const active = parseInt(this.value, 10) === year
-      const color = active && (this.color || 'primary')
-
-      return this.$createElement('li', this.setTextColor(color, {
-        key: year,
-        'class': { active },
-        on: {
-          click: () => this.$emit('input', year)
+    onMounted(() => {
+      setTimeout(() => {
+        const el = years.value
+        if (!el) return
+        const activeItem = el.getElementsByClassName('active')[0] as HTMLElement | undefined
+        if (activeItem) {
+          el.scrollTop = activeItem.offsetTop - el.offsetHeight / 2 + activeItem.offsetHeight / 2
+        } else {
+          el.scrollTop = el.scrollHeight / 2 - el.offsetHeight / 2
         }
-      }), formatted)
-    },
+      })
+    })
 
-    genYearItems (): VNode[] {
-      const children = []
-      const selectedYear = this.value ? parseInt(this.value, 10) : new Date().getFullYear()
-      const maxYear = this.max ? parseInt(this.max, 10) : (selectedYear + 100)
-      const minYear = Math.min(maxYear, this.min ? parseInt(this.min, 10) : (selectedYear - 100))
+    function genYearItem (year: number) {
+      const formatted = formatter.value(String(year))
+      const active = parseInt(String(props.value), 10) === year
+      const color = active && (props.color || 'primary')
+
+      return h('li', setTextColor(color, {
+        key: year,
+        class: { active },
+        onClick: () => emit('input', year)
+      }), formatted)
+    }
+
+    function genYearItems () {
+      const children = [] as any[]
+      const selectedYear = props.value ? parseInt(String(props.value), 10) : new Date().getFullYear()
+      const maxYear = props.max ? parseInt(String(props.max), 10) : selectedYear + 100
+      const minYear = Math.min(maxYear, props.min ? parseInt(String(props.min), 10) : selectedYear - 100)
 
       for (let year = maxYear; year >= minYear; year--) {
-        children.push(this.genYearItem(year))
+        children.push(genYearItem(year))
       }
-
       return children
     }
-  },
 
-  render (): VNode {
-    return this.$createElement('ul', {
-      staticClass: 'v-date-picker-years',
-      ref: 'years'
-    }, this.genYearItems())
+    return () => h('ul', {
+      class: 'v-date-picker-years',
+      ref: years
+    }, genYearItems())
   }
 })

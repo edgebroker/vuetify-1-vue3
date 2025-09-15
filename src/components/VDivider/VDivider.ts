@@ -1,30 +1,32 @@
 // Styles
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
+
+// Composables
+import useThemeable, { themeProps } from '../../composables/useThemeable'
 
 // Types
-import { VNode } from 'vue'
+import { defineComponent, h } from 'vue'
 
-// Mixins
-import Themeable from '../../mixins/themeable'
-
-export default Themeable.extend({
+export default defineComponent({
   name: 'v-divider',
 
   props: {
+    ...themeProps,
     inset: Boolean,
     vertical: Boolean
   },
 
-  render (h): VNode {
-    return h('hr', {
+  setup (props, { attrs }) {
+    const { themeClasses } = useThemeable(props)
+
+    return () => h('hr', {
       class: {
         'v-divider': true,
-        'v-divider--inset': this.inset,
-        'v-divider--vertical': this.vertical,
-        ...this.themeClasses
+        'v-divider--inset': props.inset,
+        'v-divider--vertical': props.vertical,
+        ...themeClasses.value
       },
-      attrs: this.$attrs,
-      on: this.$listeners
+      ...attrs
     })
   }
 })

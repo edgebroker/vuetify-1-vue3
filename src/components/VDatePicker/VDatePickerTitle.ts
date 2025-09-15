@@ -1,24 +1,19 @@
-import "@/css/vuetify.css"
+import '@/css/vuetify.css'
 
 // Components
 import VIcon from '../VIcon'
 
-// Mixins
-import PickerButton from '../../mixins/picker-button'
-
-// Utils
-import mixins from '../../util/mixins'
+// Composables
+import usePickerButton, { pickerButtonProps } from '../../composables/usePickerButton'
 
 // Types
-import { VNode } from 'vue'
+import { defineComponent, h, ref, computed, watch } from 'vue'
 
-export default mixins(
-  PickerButton
-/* @vue/component */
-).extend({
+export default defineComponent({
   name: 'v-date-picker-title',
 
   props: {
+    ...pickerButtonProps,
     date: {
       type: String,
       default: ''
@@ -38,62 +33,49 @@ export default mixins(
     }
   },
 
-  data: () => ({
-    isReversing: false
-  }),
+  setup (props, { emit }) {
+    const isReversing = ref(false)
+    const { genPickerButton } = usePickerButton(props, { emit })
 
-  computed: {
-    computedTransition (): string {
-      return this.isReversing ? 'picker-reverse-transition' : 'picker-transition'
+    const computedTransition = computed(() =>
+      isReversing.value ? 'picker-reverse-transition' : 'picker-transition'
+    )
+
+    watch(() => props.value, (val, prev) => {
+      isReversing.value = val < prev
+    })
+
+    function genYearIcon () {
+      return h(VIcon, { dark: true }, () => props.yearIcon)
     }
-  },
 
-  watch: {
-    value (val: string, prev: string) {
-      this.isReversing = val < prev
-    }
-  },
-
-  methods: {
-    genYearIcon (): VNode {
-      return this.$createElement(VIcon, {
-        props: {
-          dark: true
-        }
-      }, this.yearIcon)
-    },
-    getYearBtn (): VNode {
-      return this.genPickerButton('selectingYear', true, [
-        String(this.year),
-        this.yearIcon ? this.genYearIcon() : null
+    function getYearBtn () {
+      return genPickerButton('selectingYear', true, [
+        String(props.year),
+        props.yearIcon ? genYearIcon() : null
       ], false, 'v-date-picker-title__year')
-    },
-    genTitleText (): VNode {
-      return this.$createElement('transition', {
-        props: {
-          name: this.computedTransition
-        }
-      }, [
-        this.$createElement('div', {
-          domProps: { innerHTML: this.date || '&nbsp;' },
-          key: this.value
-        })
-      ])
-    },
-    genTitleDate (): VNode {
-      return this.genPickerButton('selectingYear', false, [this.genTitleText()], false, 'v-date-picker-title__date')
     }
-  },
 
-  render (h): VNode {
-    return h('div', {
-      staticClass: 'v-date-picker-title',
-      'class': {
-        'v-date-picker-title--disabled': this.disabled
+    function genTitleText () {
+      return h('transition', { name: computedTransition.value }, {
+        default: () => [
+          h('div', { innerHTML: props.date || '&nbsp;', key: props.value })
+        ]
+      })
+    }
+
+    function genTitleDate () {
+      return genPickerButton('selectingYear', false, [genTitleText()], false, 'v-date-picker-title__date')
+    }
+
+    return () => h('div', {
+      class: {
+        'v-date-picker-title': true,
+        'v-date-picker-title--disabled': props.disabled
       }
     }, [
-      this.getYearBtn(),
-      this.genTitleDate()
+      getYearBtn(),
+      genTitleDate()
     ])
   }
 })
