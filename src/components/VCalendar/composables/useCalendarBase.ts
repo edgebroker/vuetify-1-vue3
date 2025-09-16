@@ -2,7 +2,7 @@ import { computed } from 'vue'
 import useColorable from '../../../composables/useColorable'
 import useThemeable from '../../../composables/useThemeable'
 import useTimes from './useTimes'
-import useMouse from './useMouse'
+import useMouse, { type EmitFn } from './useMouse'
 import {
   VTimestamp,
   VTimestampFormatter,
@@ -14,7 +14,12 @@ import {
   getEndOfWeek
 } from '../util/timestamp'
 
-export default function useCalendarBase (props: any, { emit }) {
+export interface CalendarBaseContext {
+  emit: EmitFn
+}
+
+export default function useCalendarBase (props: any, context: CalendarBaseContext) {
+  const { emit } = context
   const { setTextColor } = useColorable(props)
   const { themeClasses } = useThemeable(props)
   const { times } = useTimes(props)

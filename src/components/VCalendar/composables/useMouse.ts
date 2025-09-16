@@ -1,5 +1,7 @@
 export type MouseHandler = (e: MouseEvent | TouchEvent) => any
 
+export type EmitFn = (event: string, ...args: any[]) => void
+
 export type MouseEvents = {
   [event: string]: {
     event: string
@@ -17,7 +19,7 @@ export type MouseEventsMap = {
   [event: string]: MouseHandler | MouseHandler[]
 }
 
-export default function useMouse (emit: (e: string, value?: any) => void) {
+export default function useMouse (emit: EmitFn) {
   function getMouseEventHandlers (events: MouseEvents, getEvent: MouseHandler): MouseEventsMap {
     const on: MouseEventsMap = {}
 
