@@ -8,7 +8,7 @@ import { defineComponent, h, ref, computed, nextTick, onMounted } from 'vue'
 import Resize from '../../directives/resize'
 
 // Composables
-import useCalendarWithIntervals from '../../composables/useCalendarWithIntervals'
+import useCalendarWithIntervals from './composables/useCalendarWithIntervals'
 
 // Util
 import props from './util/props'

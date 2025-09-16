@@ -10,9 +10,9 @@ import {
   createDayList,
   createIntervalList,
   createNativeLocaleFormatter
-} from '../components/VCalendar/util/timestamp'
+} from '../util/timestamp'
 
-export default function useCalendarWithIntervals (props: any, context) {
+export default function useCalendarWithIntervals (props: any, context: any) {
   const base = useCalendarBase(props, context)
 
   const parsedFirstInterval = computed(() => parseInt(props.firstInterval))
@@ -126,4 +126,3 @@ export default function useCalendarWithIntervals (props: any, context) {
     timeToY
   }
 }
-
