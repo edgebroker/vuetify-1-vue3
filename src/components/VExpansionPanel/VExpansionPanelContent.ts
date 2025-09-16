@@ -33,7 +33,11 @@ export default defineComponent({
     const { isActive } = useToggleable(props, emit)
     const { isBooted, showLazyContent } = useBootable(props, { isActive })
 
-    const height = ref('auto')
+    const rootRef = ref<HTMLElement | null>(null)
+    const bodyRef = ref<HTMLElement | null>(null)
+    const vm = getCurrentInstance()
+    const proxy = vm?.proxy
+    const uid = vm?.uid ?? (proxy as any)?._uid
 
     const isDisabled = computed(() => (expansionPanel && expansionPanel.disabled) || props.disabled)
     const isReadonly = computed(() => (expansionPanel && expansionPanel.readonly) || props.readonly)
@@ -43,31 +47,33 @@ export default defineComponent({
       'v-expansion-panel__container--disabled': isDisabled.value,
     }))
 
-    const vm = getCurrentInstance()
-
     onMounted(() => {
-      expansionPanel && expansionPanel.register && expansionPanel.register(vm?.proxy)
-      if (typeof props.value !== 'undefined') consoleWarn('v-model has been deprecated', vm?.proxy)
+      if (proxy && expansionPanel && expansionPanel.register) {
+        expansionPanel.register(proxy)
+      }
+      if (typeof props.value !== 'undefined') consoleWarn('v-model has been deprecated', proxy)
     })
 
     onBeforeUnmount(() => {
-      expansionPanel && expansionPanel.unregister && expansionPanel.unregister(vm?.proxy)
+      if (proxy && expansionPanel && expansionPanel.unregister) {
+        expansionPanel.unregister(proxy)
+      }
     })
 
     function onKeydown (e: KeyboardEvent) {
-      if (e.keyCode === 13 && vm?.proxy && vm.proxy.$el === document.activeElement) {
-        expansionPanel && expansionPanel.panelClick && expansionPanel.panelClick(vm.proxy._uid)
+      if ((e.key === 'Enter' || e.keyCode === 13) && rootRef.value === document.activeElement && uid != null) {
+        expansionPanel && expansionPanel.panelClick && expansionPanel.panelClick(uid)
       }
     }
 
     function onHeaderClick () {
-      if (!isReadonly.value) {
-        expansionPanel && expansionPanel.panelClick && expansionPanel.panelClick(vm?.proxy._uid)
+      if (!isReadonly.value && uid != null) {
+        expansionPanel && expansionPanel.panelClick && expansionPanel.panelClick(uid)
       }
     }
 
     function genBody () {
-      const body = h('div', { ref: 'body', class: 'v-expansion-panel__body' }, showLazyContent(slots.default?.()))
+      const body = h('div', { ref: bodyRef, class: 'v-expansion-panel__body' }, showLazyContent(slots.default?.()))
       return withDirectives(body, [[vShow, isActive.value]])
     }
 
@@ -99,6 +105,7 @@ export default defineComponent({
       tabindex: isReadonly.value || isDisabled.value ? undefined : 0,
       'aria-expanded': String(Boolean(isActive.value)),
       onKeydown,
+      ref: rootRef,
     }, [
       slots.header && genHeader(),
       h(VExpandTransition, {}, { default: () => [genBody()] }),

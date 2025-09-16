@@ -7,7 +7,8 @@ import useColorable, { colorProps } from '../../composables/useColorable'
 import useThemeable, { themeProps } from '../../composables/useThemeable'
 
 // Types
-import { defineComponent, h, computed, getCurrentInstance } from 'vue'
+import { defineComponent, h, computed, getCurrentInstance, ref } from 'vue'
+import { PropType } from 'vue'
 
 export default defineComponent({
   name: 'v-footer',
@@ -15,7 +16,7 @@ export default defineComponent({
   props: {
     height: {
       default: 32,
-      type: [Number, String],
+      type: [Number, String] as PropType<number | string>,
     },
     inset: Boolean,
     app: Boolean,
@@ -26,31 +27,39 @@ export default defineComponent({
   },
 
   setup (props, { slots }) {
+    const footerRef = ref<HTMLElement | null>(null)
     const { setBackgroundColor } = useColorable(props)
     const { themeClasses } = useThemeable(props)
-    const { app } = useApplicationable(props, computed(() => props.inset ? 'insetFooter' : 'footer'), ['height', 'inset'])
+    const applicationKey = computed(() => (props.inset ? 'insetFooter' : 'footer'))
+    const { app } = useApplicationable(props, applicationKey, ['height', 'inset'])
     const vm = getCurrentInstance()
+    const proxy = vm?.proxy as any
+
+    const application = computed(() => proxy?.$vuetify?.application)
+
+    const computedHeight = computed(() => {
+      const parsed = Number(props.height)
+      return Number.isNaN(parsed) ? String(props.height) : `${parsed}px`
+    })
 
     const computedMarginBottom = computed(() => {
-      if (!app.value) return 0
-      return vm?.proxy.$vuetify.application.bottom
+      if (!app.value || !application.value) return 0
+      return application.value.bottom
     })
 
     const computedPaddingLeft = computed(() => {
-      return !app.value || !props.inset
-        ? 0
-        : vm?.proxy.$vuetify.application.left
+      if (!app.value || !props.inset || !application.value) return 0
+      return application.value.left
     })
 
     const computedPaddingRight = computed(() => {
-      return !app.value || !props.inset
-        ? 0
-        : vm?.proxy.$vuetify.application.right
+      if (!app.value || !props.inset || !application.value) return 0
+      return application.value.right
     })
 
     const styles = computed(() => {
-      const style = {
-        height: isNaN(props.height) ? props.height : `${props.height}px`,
+      const style: Record<string, string> = {
+        height: computedHeight.value,
       }
       if (computedPaddingLeft.value) style.paddingLeft = `${computedPaddingLeft.value}px`
       if (computedPaddingRight.value) style.paddingRight = `${computedPaddingRight.value}px`
@@ -68,7 +77,7 @@ export default defineComponent({
     return () => h('footer', setBackgroundColor(props.color, {
       class: ['v-footer', classes.value],
       style: styles.value,
-      ref: 'content',
+      ref: footerRef,
     }), slots.default?.())
   }
 })
