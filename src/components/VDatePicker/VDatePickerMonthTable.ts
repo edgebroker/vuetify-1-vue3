@@ -30,12 +30,12 @@ export default defineComponent({
 
     function genTBody () {
       const children = []
-      const cols = Array(3).fill(null)
-      const rows = 12 / cols.length
+      const monthsPerRow = 3
+      const rows = 12 / monthsPerRow
 
       for (let row = 0; row < rows; row++) {
-        const tds = cols.map((_, col) => {
-          const month = row * cols.length + col
+        const tds = Array.from({ length: monthsPerRow }, (_, col) => {
+          const month = row * monthsPerRow + col
           const date = `${displayedYear.value}-${pad(month + 1)}`
           return h('td', { key: month }, [
             genButton(date, false, 'month', formatter.value),

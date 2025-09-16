@@ -46,8 +46,12 @@ export default defineComponent({
     const { themeClasses } = useThemeable(props)
     const { save } = useReturnable(props, { isActive, emit })
 
-    function focus () {
-      const input = contentRef.value?.querySelector('input')
+    function getInputElement () {
+      return contentRef.value?.querySelector('input')
+    }
+
+    function focusInput () {
+      const input = getInputElement()
       input && input.focus()
     }
 
@@ -56,11 +60,16 @@ export default defineComponent({
       emit('cancel')
     }
 
+    function commitSave (value) {
+      save(value)
+      emit('save')
+    }
+
     watch(isActive, val => {
       if (val) {
         emit('open')
         nextTick(() => {
-          setTimeout(() => focus(), 50)
+          setTimeout(() => focusInput(), 50)
         })
       } else {
         emit('close')
@@ -83,22 +92,22 @@ export default defineComponent({
         class: 'v-small-dialog__actions',
       }, [
         genButton(cancel, props.cancelText),
-        genButton(() => {
-          save(props.returnValue)
-          emit('save')
-        }, props.saveText),
+        genButton(() => commitSave(props.returnValue), props.saveText),
       ])
     }
 
     function onKeydown (e) {
-      const input = contentRef.value?.querySelector('input')
+      const input = getInputElement()
       if (e.keyCode === keyCodes.esc) {
         cancel()
       }
       if (e.keyCode === keyCodes.enter && input) {
-        save(input.value)
-        emit('save')
+        commitSave(input.value)
       }
+    }
+
+    function updateMenuState (value) {
+      isActive.value = value
     }
 
     function genContent () {
@@ -126,7 +135,7 @@ export default defineComponent({
         lazy: props.lazy,
         light: props.light,
         dark: props.dark,
-        onInput: val => { isActive.value = val },
+        onInput: updateMenuState,
       }, {
         activator: () => h('a', {}, slots.default?.()),
         default: () => children,

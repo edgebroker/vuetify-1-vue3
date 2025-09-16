@@ -27,6 +27,8 @@ export type DateEvents = string[] | ((date: string) => boolean | DateEventColorV
 export type DateEventColors = DateEventColorValue | Record<string, DateEventColorValue> | ((date: string) => DateEventColorValue)
 type DatePickerValue = string | string[] | undefined
 type DatePickerType = 'date' | 'month'
+type ActivePicker = 'DATE' | 'MONTH' | 'YEAR'
+type TableDateType = 'month' | 'year'
 type DatePickerMultipleFormatter = (date: string[]) => string
 interface Formatters {
   year: DatePickerFormatter
@@ -131,7 +133,11 @@ export default defineComponent({
     const now = new Date()
     const vm = getCurrentInstance()
 
-    const activePicker = ref(props.type.toUpperCase() as 'DATE' | 'MONTH' | 'YEAR')
+    const isMonthPicker = computed(() => props.type === 'month')
+    const typeToPicker = computed<ActivePicker>(() => (isMonthPicker.value ? 'MONTH' : 'DATE'))
+    const tableDateType = computed<TableDateType>(() => (isMonthPicker.value ? 'year' : 'month'))
+
+    const activePicker = ref<ActivePicker>(typeToPicker.value)
     const inputDay = ref<number | null>(null)
     const inputMonth = ref<number | null>(null)
     const inputYear = ref<number | null>(null)
@@ -140,9 +146,9 @@ export default defineComponent({
     const initialLastValue = getLastArrayValue(props.value, props.multiple)
     const initialTableDate = props.pickerDate || sanitizeDateString(
       (initialLastValue || `${now.getFullYear()}-${now.getMonth() + 1}`),
-      props.type === 'date' ? 'month' : 'year'
+      tableDateType.value
     )
-    const tableDate = ref(initialTableDate)
+    const tableDate = ref<string>(initialTableDate)
 
     const { themeClasses } = useThemeable(props)
     const { genPickerActionsSlot } = usePicker(props, { slots })
@@ -150,7 +156,7 @@ export default defineComponent({
     const lastValue = computed(() => getLastArrayValue(props.value, props.multiple))
 
     const selectedMonths = computed(() => {
-      if (!props.value || (Array.isArray(props.value) && !props.value.length) || props.type === 'month') {
+      if (!props.value || (Array.isArray(props.value) && !props.value.length) || isMonthPicker.value) {
         return props.value
       } else if (props.multiple && Array.isArray(props.value)) {
         return props.value.map(val => val.substr(0, 7))
@@ -258,7 +264,7 @@ export default defineComponent({
 
     function yearClick (value: number) {
       inputYear.value = value
-      if (props.type === 'month') {
+      if (isMonthPicker.value) {
         tableDate.value = `${value}`
       } else {
         tableDate.value = `${value}-${pad((tableMonth.value || 0) + 1)}`
@@ -273,7 +279,7 @@ export default defineComponent({
       const [year, month] = value.split('-').map(Number)
       inputYear.value = year
       inputMonth.value = month - 1
-      if (props.type === 'date') {
+      if (!isMonthPicker.value) {
         if (inputDay.value != null) {
           inputDay.value = Math.min(inputDay.value, daysInMonth(inputYear.value!, (inputMonth.value ?? 0) + 1))
         }
@@ -296,6 +302,10 @@ export default defineComponent({
       emitInput(inputDate.value)
     }
 
+    function updateTableDate (value: string) {
+      tableDate.value = value
+    }
+
     function genPickerTitle () {
       return h(VDatePickerTitle, {
         date: props.value ? (formatters.value.titleDate as (value: any) => string)(props.value) : '',
@@ -305,7 +315,7 @@ export default defineComponent({
         year: formatters.value.year(props.value ? `${inputYear.value}` : tableDate.value),
         yearIcon: props.yearIcon,
         value: props.multiple && Array.isArray(props.value) ? props.value[0] : props.value,
-        'onUpdate:selectingYear': (value: boolean) => { activePicker.value = value ? 'YEAR' : props.type.toUpperCase() as any },
+        'onUpdate:selectingYear': (value: boolean) => { activePicker.value = value ? 'YEAR' : typeToPicker.value },
       })
     }
 
@@ -324,7 +334,7 @@ export default defineComponent({
         readonly: props.readonly,
         value: activePicker.value === 'DATE' ? `${pad(tableYear.value, 4)}-${pad(tableMonth.value + 1)}` : `${pad(tableYear.value, 4)}`,
         onToggle: () => { activePicker.value = activePicker.value === 'DATE' ? 'MONTH' : 'YEAR' },
-        onInput: (value: string) => { tableDate.value = value },
+        onInput: updateTableDate,
       })
     }
 
@@ -350,7 +360,7 @@ export default defineComponent({
         value: props.value,
         weekdayFormat: props.weekdayFormat,
         onInput: dateClick,
-        onTableDate: (value: string) => { tableDate.value = value },
+        onTableDate: updateTableDate,
         'onClick:date': (value: string) => emit('click:date', value),
         'onDblclick:date': (value: string) => emit('dblclick:date', value),
       })
@@ -358,24 +368,24 @@ export default defineComponent({
 
     function genMonthTable () {
       return h(VDatePickerMonthTable, {
-        allowedDates: props.type === 'month' ? props.allowedDates : null,
+        allowedDates: isMonthPicker.value ? props.allowedDates : null,
         color: props.color,
         current: current.value ? sanitizeDateString(current.value, 'month') : null,
         dark: props.dark,
         disabled: props.disabled,
-        events: props.type === 'month' ? props.events : null,
-        eventColor: props.type === 'month' ? props.eventColor : null,
+        events: isMonthPicker.value ? props.events : null,
+        eventColor: isMonthPicker.value ? props.eventColor : null,
         format: props.monthFormat,
         light: props.light,
         locale: props.locale,
         min: minMonth.value,
         max: maxMonth.value,
-        readonly: props.readonly && props.type === 'month',
+        readonly: props.readonly && isMonthPicker.value,
         scrollable: props.scrollable,
         value: selectedMonths.value,
         tableDate: `${pad(tableYear.value, 4)}`,
         onInput: monthClick,
-        onTableDate: (value: string) => { tableDate.value = value },
+        onTableDate: updateTableDate,
         'onClick:month': (value: string) => emit('click:month', value),
         'onDblclick:month': (value: string) => emit('dblclick:month', value),
       })
@@ -409,7 +419,7 @@ export default defineComponent({
         const array = lastValue.value.split('-')
         inputYear.value = parseInt(array[0], 10)
         inputMonth.value = parseInt(array[1], 10) - 1
-        if (props.type === 'date') {
+        if (!isMonthPicker.value) {
           inputDay.value = parseInt(array[2], 10)
         }
       } else {
@@ -421,8 +431,8 @@ export default defineComponent({
 
     watch(tableDate, (val, prev) => {
       if (prev != null) {
-        const sanitizeType = props.type === 'month' ? 'year' : 'month'
-        isReversing.value = sanitizeDateString(val, sanitizeType) < sanitizeDateString(prev, sanitizeType)
+        const comparisonType = tableDateType.value
+        isReversing.value = sanitizeDateString(val, comparisonType) < sanitizeDateString(prev, comparisonType)
       }
       emit('update:pickerDate', val)
     })
@@ -430,9 +440,9 @@ export default defineComponent({
     watch(() => props.pickerDate, val => {
       if (val) {
         tableDate.value = val
-      } else if (lastValue.value && props.type === 'date') {
+      } else if (lastValue.value && !isMonthPicker.value) {
         tableDate.value = sanitizeDateString(lastValue.value, 'month')
-      } else if (lastValue.value && props.type === 'month') {
+      } else if (lastValue.value && isMonthPicker.value) {
         tableDate.value = sanitizeDateString(lastValue.value, 'year')
       }
     })
@@ -442,20 +452,21 @@ export default defineComponent({
       setInputDate()
 
       if (!props.pickerDate) {
+        const typeForTable = tableDateType.value
         if (!props.multiple && typeof newValue === 'string') {
-          tableDate.value = sanitizeDateString(inputDate.value, props.type === 'month' ? 'year' : 'month')
+          tableDate.value = sanitizeDateString(inputDate.value, typeForTable)
         } else if (props.multiple) {
           const newArray = Array.isArray(newValue) ? newValue : []
           const oldArray = Array.isArray(oldValue) ? oldValue : []
           if (newArray.length && !oldArray.length) {
-            tableDate.value = sanitizeDateString(inputDate.value, props.type === 'month' ? 'year' : 'month')
+            tableDate.value = sanitizeDateString(inputDate.value, typeForTable)
           }
         }
       }
     })
 
     watch(() => props.type, type => {
-      activePicker.value = type.toUpperCase() as 'DATE' | 'MONTH' | 'YEAR'
+      activePicker.value = typeToPicker.value
 
       if (props.value) {
         const values = props.multiple
