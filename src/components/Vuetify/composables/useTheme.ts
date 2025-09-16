@@ -11,7 +11,7 @@ const THEME_DEFAULTS = {
   warning: '#FB8C00'    // orange.darken1
 }
 
-export default function theme (theme: VuetifyUseOptions['theme'] = {}): VuetifyTheme | false {
+export default function useTheme (theme: VuetifyUseOptions['theme'] = {}): VuetifyTheme | false {
   if (theme === false) return false
 
   return {

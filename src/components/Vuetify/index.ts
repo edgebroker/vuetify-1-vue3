@@ -1,11 +1,11 @@
 import OurVue from 'vue'
 
-import application from './mixins/application'
-import breakpoint from './mixins/breakpoint'
-import theme from './mixins/theme'
-import icons from './mixins/icons'
-import options from './mixins/options'
-import genLang from './mixins/lang'
+import useApplication from './composables/useApplication'
+import useBreakpoint from './composables/useBreakpoint'
+import useTheme from './composables/useTheme'
+import useIcons from './composables/useIcons'
+import useOptions from './composables/useOptions'
+import useLang from './composables/useLang'
 import goTo from './goTo'
 
 // Utils
@@ -26,20 +26,20 @@ const Vuetify: VuetifyPlugin = {
 
     checkVueVersion(Vue)
 
-    const lang = genLang(opts.lang)
+    const application = useApplication()
+    const breakpoint = useBreakpoint(opts.breakpoint)
+    const lang = useLang(opts.lang)
 
     Vue.prototype.$vuetify = new Vue({
-      mixins: [
-        breakpoint(opts.breakpoint)
-      ],
       data: {
         application,
+        breakpoint,
         dark: false,
-        icons: icons(opts.iconfont, opts.icons),
+        icons: useIcons(opts.iconfont, opts.icons),
         lang,
-        options: options(opts.options),
+        options: useOptions(opts.options),
         rtl: opts.rtl,
-        theme: theme(opts.theme)
+        theme: useTheme(opts.theme)
       },
       methods: {
         goTo,

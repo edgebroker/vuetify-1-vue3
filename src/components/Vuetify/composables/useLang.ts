@@ -24,7 +24,7 @@ function getTranslation (locale: VuetifyLocale, key: string, usingFallback = fal
   return translation
 }
 
-export default function lang (config: Options['lang'] = {}): VuetifyLanguage {
+export default function useLang (config: Options['lang'] = {}): VuetifyLanguage {
   return {
     locales: Object.assign({ en }, config.locales),
     current: config.current || 'en',
