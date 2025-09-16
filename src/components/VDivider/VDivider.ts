@@ -5,7 +5,7 @@ import '@/css/vuetify.css'
 import useThemeable, { themeProps } from '../../composables/useThemeable'
 
 // Types
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, computed } from 'vue'
 
 export default defineComponent({
   name: 'v-divider',
@@ -18,14 +18,15 @@ export default defineComponent({
 
   setup (props, { attrs }) {
     const { themeClasses } = useThemeable(props)
+    const classes = computed(() => ({
+      'v-divider': true,
+      'v-divider--inset': props.inset,
+      'v-divider--vertical': props.vertical,
+      ...themeClasses.value
+    }))
 
     return () => h('hr', {
-      class: {
-        'v-divider': true,
-        'v-divider--inset': props.inset,
-        'v-divider--vertical': props.vertical,
-        ...themeClasses.value
-      },
+      class: classes.value,
       ...attrs
     })
   }

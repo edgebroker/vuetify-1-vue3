@@ -40,6 +40,10 @@ export default defineComponent({
     const computedTransition = computed(() =>
       isReversing.value ? 'picker-reverse-transition' : 'picker-transition'
     )
+    const classes = computed(() => ({
+      'v-date-picker-title': true,
+      'v-date-picker-title--disabled': props.disabled
+    }))
 
     watch(() => props.value, (val, prev) => {
       isReversing.value = val < prev
@@ -69,10 +73,7 @@ export default defineComponent({
     }
 
     return () => h('div', {
-      class: {
-        'v-date-picker-title': true,
-        'v-date-picker-title--disabled': props.disabled
-      }
+      class: classes.value
     }, [
       getYearBtn(),
       genTitleDate()
