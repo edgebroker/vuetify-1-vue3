@@ -2,6 +2,7 @@ import '@/css/vuetify.css'
 
 // Composables
 import useThemeable from '../../composables/useThemeable'
+import useAppTheme from './composables/useAppTheme'
 
 // Directives
 import Resize from '../../directives/resize'
@@ -24,8 +25,12 @@ export default defineComponent({
   },
 
   setup (props, { slots }) {
+    const vm = getCurrentInstance()
+    const proxy = vm?.proxy
+
+    useAppTheme()
+
     const { themeClasses } = useThemeable(props)
-    const { proxy } = getCurrentInstance()
 
     const classes = computed(() => ({
       'application--is-rtl': proxy?.$vuetify.rtl,
