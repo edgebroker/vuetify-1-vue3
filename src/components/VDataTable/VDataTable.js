@@ -3,14 +3,27 @@ import '@/css/vuetify.css'
 // Composables
 import useDataIterable, { dataIterableProps } from '../../composables/useDataIterable'
 import useThemeable, { themeProps } from '../../composables/useThemeable'
+import useDataTableBody from './composables/useDataTableBody'
+import useDataTableFoot from './composables/useDataTableFoot'
+import useDataTableHead from './composables/useDataTableHead'
+import useDataTableProgress from './composables/useDataTableProgress'
 
 // Utils
 import { createSimpleFunctional, getObjectValueByPath } from '../../util/helpers'
 
 // Types
-import { defineComponent, h } from 'vue'
+import { computed, defineComponent, getCurrentInstance, h } from 'vue'
 
 const VTableOverflow = createSimpleFunctional('v-table__overflow')
+
+function hasTag (elements, tag) {
+  if (!Array.isArray(elements)) return false
+
+  return elements.some(node => {
+    if (!node || Array.isArray(node)) return false
+    return typeof node.type === 'string' && node.type === tag
+  })
+}
 
 export default defineComponent({
   name: 'v-data-table',
@@ -49,33 +62,89 @@ export default defineComponent({
     ...themeProps
   },
 
-  setup (props, { slots, attrs, emit }) {
+  setup (props, { slots, emit }) {
     const iterable = useDataIterable(props, emit)
     const { themeClasses } = useThemeable(props)
+    const vm = getCurrentInstance()?.proxy
+
+    const firstSortable = props.headers.find(header => header && (!('sortable' in header) || header.sortable))
+    iterable.defaultPagination.value.sortBy = !props.disableInitialSort && firstSortable
+      ? firstSortable.value
+      : null
 
     iterable.initPagination()
 
-    function classes () {
-      return {
-        'v-datatable v-table': true,
-        'v-datatable--select-all': props.selectAll !== false,
-        ...themeClasses.value
-      }
+    const classes = computed(() => ({
+      'v-datatable v-table': true,
+      'v-datatable--select-all': props.selectAll !== false,
+      ...themeClasses.value
+    }))
+
+    const filteredItems = computed(() => iterable.filteredItemsImpl(props.headers))
+
+    const headerColumns = computed(() => {
+      if (props.headersLength != null) return props.headersLength
+      return props.headers.length + (props.selectAll !== false ? 1 : 0)
+    })
+
+    function genTR (children, data = {}) {
+      const normalizedChildren = Array.isArray(children) ? children : [children]
+      const { attrs, ...rest } = data
+      const propsOut = { ...rest }
+      if (attrs) Object.assign(propsOut, attrs)
+      return h('tr', propsOut, normalizedChildren)
     }
 
-    const filteredItems = () => iterable.filteredItemsImpl(props.headers)
+    const { genTProgress } = useDataTableProgress({
+      genProgress: () => (slots.progress ? slots.progress() : null),
+      genTR,
+      headerColumns
+    })
+
+    const { genTHead } = useDataTableHead(props, { slots }, {
+      computedPagination: iterable.computedPagination,
+      expanded: iterable.expanded,
+      genTR,
+      genTProgress,
+      hasSelectAll: iterable.hasSelectAll,
+      hasTag,
+      indeterminate: iterable.indeterminate,
+      toggle: iterable.toggle,
+      sort: iterable.sort,
+      everyItem: iterable.everyItem,
+      vm
+    })
+
+    const { genTBody } = useDataTableBody(props, { slots }, {
+      headerColumns,
+      itemKey: props.itemKey,
+      isExpanded: iterable.isExpanded,
+      isSelected: iterable.isSelected,
+      filteredItems,
+      createProps: iterable.createProps,
+      genTR,
+      hasTag
+    })
+
+    const { genTFoot, genActionsFooter } = useDataTableFoot(props, { slots }, {
+      classes,
+      genActions: iterable.genActions,
+      genTR
+    })
 
     return () => {
-      const headerRow = !props.hideHeaders ? h('thead', [h('tr', props.headers.map((hObj, i) => h('th', { key: props.headerKey ? hObj[props.headerKey] : i }, hObj[props.headerText])) )]) : null
-      const bodyRows = h('tbody', filteredItems().map((item, index) => {
-        return slots.item ? slots.item(iterable.createProps(item, index)) : null
-      }))
-
-      const table = h(VTableOverflow, {}, [
-        h('table', { class: classes() }, [headerRow, bodyRows])
+      const tableOverflow = h(VTableOverflow, {}, [
+        h('table', { class: classes.value }, [
+          genTHead(),
+          genTBody(),
+          genTFoot()
+        ])
       ])
 
-      return h('div', [table, iterable.genActions ? iterable.genActions() : null])
+      return h('div', [
+        tableOverflow,
+        genActionsFooter()
+      ])
     }
   }
 })
