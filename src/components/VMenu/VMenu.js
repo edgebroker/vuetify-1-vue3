@@ -1,15 +1,20 @@
 import "@/css/vuetify.css"
 
-import { defineComponent, h, ref } from 'vue'
+import { defineComponent, h, ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 
 // Composables
 import useBootable from '../../composables/useBootable'
 import useDelayable from '../../composables/useDelayable'
 import useDetachable, { detachableProps } from '../../composables/useDetachable'
+import useDependent from '../../composables/useDependent'
 import useMenuable, { menuableProps } from '../../composables/useMenuable'
 import useReturnable, { returnableProps } from '../../composables/useReturnable'
 import useThemeable, { themeProps } from '../../composables/useThemeable'
 import useToggleable from '../../composables/useToggleable'
+import useMenuActivator from './composables/useMenuActivator'
+import useMenuGenerators from './composables/useMenuGenerators'
+import useMenuKeyable from './composables/useMenuKeyable'
+import useMenuPosition from './composables/useMenuPosition'
 
 // Directives
 import ClickOutside from '../../directives/click-outside'
@@ -38,6 +43,7 @@ export default defineComponent({
       default: true
     },
     disabled: Boolean,
+    disableKeys: Boolean,
     fullWidth: Boolean,
     maxHeight: { default: 'auto' },
     openOnClick: {
@@ -69,38 +75,187 @@ export default defineComponent({
     ...themeProps
   },
 
-  setup (props, { slots, emit }) {
-    const activatorRef = ref()
-    const contentRef = ref()
+  setup (props, { slots, emit, attrs }) {
+    const activatorRef = ref(null)
+    const activatorNode = ref(null)
+    const contentRef = ref(null)
+    const activatedBy = ref(null)
+    const defaultOffset = 8
+    let resizeTimeout = 0
 
     const { runDelay, clearDelay } = useDelayable(props)
     const { isActive } = useToggleable(props, emit)
     const menuable = useMenuable(props, { activator: activatorRef, content: contentRef, isActive })
-    const detachable = useDetachable(props, { activator: activatorRef, content: contentRef, isActive })
+    const detachable = useDetachable(props, { activator: activatorNode, content: contentRef, isActive })
     const { save } = useReturnable(props, { isActive, emit })
     const { themeClasses, rootThemeClasses } = useThemeable(props)
     const { showLazyContent } = useBootable(props, { isActive })
+    const dependent = useDependent()
+    const selectedIndex = ref(null)
+
+    function getActivator (e) {
+      if (props.activator) {
+        if (typeof props.activator === 'string') {
+          return typeof document !== 'undefined' ? document.querySelector(props.activator) : null
+        }
+        return props.activator
+      }
+
+      if (activatorRef.value) {
+        return activatorRef.value.children.length > 0
+          ? activatorRef.value.children[0]
+          : activatorRef.value
+      }
+
+      if (e && e.currentTarget) {
+        activatedBy.value = e.currentTarget
+        return activatedBy.value
+      }
+
+      if (activatedBy.value) return activatedBy.value
+
+      if (activatorNode.value) {
+        const node = Array.isArray(activatorNode.value) ? activatorNode.value[0] : activatorNode.value
+        const el = node && node.elm
+        if (el) return el
+      }
+
+      return null
+    }
+
+    const menuActivator = useMenuActivator(props, {
+      activatorRef,
+      contentRef,
+      isActive,
+      runDelay,
+      menuable,
+      getActivator
+    })
+
+    const menuKeyable = useMenuKeyable(props, {
+      contentRef,
+      isActive,
+      getActivator
+    })
+
+    const menuPosition = useMenuPosition(props, {
+      contentRef,
+      dimensions: menuable.dimensions,
+      computedTop: menuable.computedTop,
+      isAttached: menuable.isAttached,
+      defaultOffset,
+      tiles: menuKeyable.tiles,
+      selectedIndex
+    })
+
+    const calculatedMaxHeight = computed(() => props.auto ? '200px' : convertToUnit(props.maxHeight))
+    const calculatedMaxWidth = computed(() => convertToUnit(props.maxWidth))
+    const calculatedMinWidth = computed(() => {
+      if (props.minWidth !== undefined && props.minWidth !== null) {
+        return convertToUnit(props.minWidth)
+      }
+
+      const activatorWidth = menuable.dimensions.activator.width || 0
+      const parsedNudgeWidth = Number(props.nudgeWidth || 0)
+      const nudgeWidth = isNaN(parsedNudgeWidth) ? 0 : parsedNudgeWidth
+      const minWidth = activatorWidth + nudgeWidth + (props.auto ? 16 : 0)
+      const parsedMaxWidth = parseInt(calculatedMaxWidth.value, 10)
+      const width = isNaN(parsedMaxWidth) ? minWidth : Math.min(parsedMaxWidth, minWidth)
+
+      return `${width}px`
+    })
+
+    const calculatedLeft = computed(() => {
+      if (!props.auto) {
+        return menuable.calcLeft(menuable.dimensions.content.width)
+      }
+
+      const left = menuPosition.calcLeftAuto()
+      return `${menuable.calcXOverflow(left, menuable.dimensions.content.width)}px`
+    })
+
+    const calculatedTop = computed(() => {
+      if (!props.auto || menuable.isAttached.value) {
+        return menuable.calcTop()
+      }
+
+      return `${menuable.calcYOverflow(menuPosition.calculatedTopAuto.value)}px`
+    })
+
+    const styles = computed(() => ({
+      maxHeight: calculatedMaxHeight.value,
+      minWidth: calculatedMinWidth.value,
+      maxWidth: calculatedMaxWidth.value,
+      top: calculatedTop.value,
+      left: calculatedLeft.value,
+      transformOrigin: props.origin,
+      zIndex: menuable.zIndex.value
+    }))
+
+    function closeConditional () {
+      return isActive.value && props.closeOnClick
+    }
 
     function activate () {
-      if (props.disabled) return
-      runDelay('open', () => {
-        isActive.value = true
-        menuable.updateDimensions()
+      menuKeyable.getTiles()
+      menuable.updateDimensions()
+      requestAnimationFrame(() => {
+        menuable.isContentActive.value = true
+        menuPosition.calculatedTopAuto.value = menuPosition.calcTopAuto()
+        if (props.auto && contentRef.value) {
+          contentRef.value.scrollTop = menuPosition.calcScrollPosition()
+        }
       })
     }
 
     function deactivate () {
-      runDelay('close', () => {
-        isActive.value = false
-      })
+      menuable.callDeactivate()
     }
 
     function onResize () {
-      if (isActive.value) menuable.updateDimensions()
+      if (!isActive.value) return
+
+      if (contentRef.value) contentRef.value.offsetWidth
+      menuable.updateDimensions()
+      clearTimeout(resizeTimeout)
+      resizeTimeout = setTimeout(menuable.updateDimensions, 100)
     }
+
+    const menuGenerators = useMenuGenerators(props, {
+      slots,
+      attrs,
+      activatorRef,
+      activatorNode,
+      contentRef,
+      isActive,
+      menuable,
+      menuActivator,
+      menuKeyable,
+      showLazyContent,
+      styles,
+      rootThemeClasses,
+      getScopeIdAttrs: detachable.getScopeIdAttrs,
+      closeConditional,
+      dependent
+    })
+
+    watch(isActive, val => {
+      dependent.isActive.value = val
+      if (val) activate()
+      else deactivate()
+    })
+
+    onMounted(() => {
+      if (isActive.value) activate()
+    })
+
+    onBeforeUnmount(() => {
+      clearTimeout(resizeTimeout)
+    })
 
     return {
       activatorRef,
+      activatorNode,
       contentRef,
       runDelay,
       clearDelay,
@@ -110,69 +265,36 @@ export default defineComponent({
       save,
       themeClasses,
       rootThemeClasses,
+      hasJustFocused: menuActivator.hasJustFocused,
       showLazyContent,
-      activate,
-      deactivate,
+      genActivator: menuGenerators.genActivator,
+      genContent: menuGenerators.genContent,
+      genTransition: menuGenerators.genTransition,
+      onKeyDown: menuKeyable.onKeyDown,
       onResize,
-      slots,
-      emit
+      styles,
+      calculatedLeft,
+      calculatedTop,
+      calculatedMinWidth,
+      calculatedMaxWidth,
+      calculatedMaxHeight,
+      closeConditional,
+      activate,
+      deactivate
     }
   },
 
   render () {
-    const activator = this.$slots.activator ? h('div', {
-      ref: 'activatorRef',
-      class: {
-        'v-menu__activator': true,
-        'v-menu__activator--active': this.isActive,
-        'v-menu__activator--disabled': this.disabled
-      },
-      on: this.openOnClick ? { click: this.activate } : undefined
-    }, this.$slots.activator()) : null
-
-    const styles = {
-      maxHeight: this.auto ? '200px' : convertToUnit(this.maxHeight),
-      minWidth: this.minWidth !== undefined ? convertToUnit(this.minWidth) : `${this.dimensions.activator.width}px`,
-      maxWidth: convertToUnit(this.maxWidth),
-      top: this.calcTop(),
-      left: this.calcLeft(this.dimensions.content.width),
-      transformOrigin: this.origin,
-      zIndex: this.zIndex
+    const data = {
+      staticClass: 'v-menu',
+      class: { 'v-menu--inline': !this.fullWidth && !!this.$slots.activator },
+      directives: [{ arg: 500, name: 'resize', value: this.onResize }],
+      on: this.disableKeys ? undefined : { keydown: this.onKeyDown }
     }
 
-    const content = h('div', {
-      ref: 'contentRef',
-      class: ['v-menu__content', this.rootThemeClasses, {
-        'v-menu__content--auto': this.auto,
-        'v-menu__content--fixed': this.activatorFixed,
-        'menuable__content__active': this.isActive,
-        [this.contentClass.trim()]: true
-      }],
-      style: styles,
-      directives: [
-        { name: 'click-outside', value: this.deactivate },
-        { name: 'show', value: this.isContentActive }
-      ],
-      on: {
-        click: e => {
-          e.stopPropagation()
-          if (e.target.getAttribute('disabled')) return
-          if (this.closeOnContentClick) this.deactivate()
-        }
-      }
-    }, this.showLazyContent(this.$slots.default))
-
-    const transition = this.transition
-      ? h('transition', { props: { name: this.transition } }, [content])
-      : content
-
-    return h('div', {
-      class: { 'v-menu--inline': !this.fullWidth && !!this.$slots.activator },
-      directives: [{ arg: 500, name: 'resize', value: this.onResize }]
-    }, [
-      activator,
-      h(ThemeProvider, { props: { root: true, light: this.light, dark: this.dark } }, [transition])
+    return h('div', data, [
+      this.genActivator(),
+      h(ThemeProvider, { props: { root: true, light: this.light, dark: this.dark } }, [this.genTransition()])
     ])
   }
 })
-

@@ -342,6 +342,7 @@ export default function useMenuable (props, {
     calcTop,
     calcXOverflow,
     calcYOverflow,
+    isAttached,
     zIndex,
   }
 }
