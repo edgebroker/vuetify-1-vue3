@@ -53,6 +53,8 @@ export default defineComponent({
     const vm = getCurrentInstance()
     const isRtl = computed(() => Boolean(vm?.proxy?.$vuetify?.rtl))
 
+    const stringValue = computed(() => String(props.value))
+
     const isReversing = ref(false)
 
     watch(() => props.value, (newVal, oldVal) => {
@@ -62,7 +64,7 @@ export default defineComponent({
     const formatter = computed<DatePickerFormatter>(() => {
       if (props.format) {
         return props.format as DatePickerFormatter
-      } else if (String(props.value).split('-')[1]) {
+      } else if (stringValue.value.split('-')[1]) {
         return createNativeLocaleFormatter(props.locale, { month: 'long', year: 'numeric', timeZone: 'UTC' }, { length: 7 })
       } else {
         return createNativeLocaleFormatter(props.locale, { year: 'numeric', timeZone: 'UTC' }, { length: 4 })
@@ -74,12 +76,12 @@ export default defineComponent({
     const color = computed(() => !props.disabled && (props.color || 'accent'))
 
     function calculateChange (sign: number) {
-      const [year, month] = String(props.value).split('-').map(Number)
+      const [year, month] = stringValue.value.split('-').map(Number)
 
       if (Number.isNaN(month) || month == null) {
         return `${year + sign}`
       } else {
-        return monthChange(String(props.value), sign)
+        return monthChange(stringValue.value, sign)
       }
     }
 
@@ -107,12 +109,12 @@ export default defineComponent({
       const headerContent = h('button', {
         type: 'button',
         onClick: () => emit('toggle'),
-      }, slots.default?.() ?? formatter.value(String(props.value)))
+      }, slots.default?.() ?? formatter.value(stringValue.value))
 
       const colorData = setTextColor(color.value, { class: {}, style: {} } as Record<string, any>)
 
       const header = h('div', {
-        key: String(props.value),
+        key: stringValue.value,
         class: colorData.class,
         style: colorData.style,
       }, [headerContent])

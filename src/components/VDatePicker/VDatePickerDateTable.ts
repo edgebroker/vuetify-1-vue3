@@ -41,8 +41,10 @@ export default defineComponent({
       props.weekdayFormat || createNativeLocaleFormatter(props.locale, { weekday: 'narrow', timeZone: 'UTC' })
     )
 
+    const firstDayOfWeek = computed(() => parseInt(String(props.firstDayOfWeek), 10))
+
     const weekDays = computed(() => {
-      const first = parseInt(String(props.firstDayOfWeek), 10)
+      const first = firstDayOfWeek.value
 
       return weekdayFormatter.value
         ? createRange(7).map(i => weekdayFormatter.value!(`2017-01-${first + i + 15}`))
@@ -62,7 +64,7 @@ export default defineComponent({
     function weekDaysBeforeFirstDayOfTheMonth () {
       const firstDayOfTheMonth = new Date(`${displayedYear.value}-${pad(displayedMonth.value + 1)}-01T00:00:00+00:00`)
       const weekDay = firstDayOfTheMonth.getUTCDay()
-      return (weekDay - parseInt(String(props.firstDayOfWeek)) + 7) % 7
+      return (weekDay - firstDayOfWeek.value + 7) % 7
     }
 
     function getWeekNumber () {
@@ -77,7 +79,7 @@ export default defineComponent({
         ((displayedYear.value - 1) >> 2) -
         Math.floor((displayedYear.value - 1) / 100) +
         Math.floor((displayedYear.value - 1) / 400) -
-        Number(props.firstDayOfWeek)
+        firstDayOfWeek.value
       ) % 7
       return Math.floor((dayOfYear + offset) / 7) + 1
     }
