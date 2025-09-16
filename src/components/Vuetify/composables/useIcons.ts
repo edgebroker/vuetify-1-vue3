@@ -148,6 +148,6 @@ const iconSets: Record<string, VuetifyIcons> = {
   faSvg: convertToComponentDeclarations('font-awesome-icon', ICONS_FONTAWESOME)
 }
 
-export default function icons (iconfont = 'md', icons: Partial<VuetifyIcons> = {}) {
+export default function useIcons (iconfont = 'md', icons: Partial<VuetifyIcons> = {}): VuetifyIcons {
   return Object.assign({}, iconSets[iconfont] || iconSets.md, icons)
 }

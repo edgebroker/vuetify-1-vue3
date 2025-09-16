@@ -7,7 +7,7 @@ const OPTIONS_DEFAULTS = {
   cspNonce: null
 } as VuetifyOptions
 
-export default function options (options: Partial<VuetifyOptions> = {}): VuetifyOptions {
+export default function useOptions (options: Partial<VuetifyOptions> = {}): VuetifyOptions {
   return {
     ...OPTIONS_DEFAULTS,
     ...options
