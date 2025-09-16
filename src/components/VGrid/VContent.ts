@@ -5,7 +5,7 @@ import '@/css/vuetify.css'
 import useSsrBootable from '../../composables/useSsrBootable'
 
 // Types
-import { defineComponent, h, computed, getCurrentInstance } from 'vue'
+import { defineComponent, h, computed, getCurrentInstance, ref } from 'vue'
 
 export default defineComponent({
   name: 'v-content',
@@ -20,9 +20,14 @@ export default defineComponent({
   setup (props, { slots }) {
     useSsrBootable()
     const vm = getCurrentInstance()
+    const proxy = vm?.proxy as any
+    const contentRef = ref<HTMLElement | null>(null)
+
+    const fallbackApplication = { bar: 0, top: 0, right: 0, footer: 0, insetFooter: 0, bottom: 0, left: 0 }
+    const application = computed(() => proxy?.$vuetify?.application ?? fallbackApplication)
 
     const styles = computed(() => {
-      const { bar, top, right, footer, insetFooter, bottom, left } = vm?.proxy.$vuetify.application
+      const { bar, top, right, footer, insetFooter, bottom, left } = application.value
       return {
         paddingTop: `${top + bar}px`,
         paddingRight: `${right}px`,
@@ -34,7 +39,7 @@ export default defineComponent({
     return () => h(props.tag, {
       class: 'v-content',
       style: styles.value,
-      ref: 'content',
+      ref: contentRef,
     }, [h('div', { class: 'v-content__wrap' }, slots.default?.())])
   }
 })
