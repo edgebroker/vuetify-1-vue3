@@ -1,6 +1,6 @@
 import { computed } from 'vue'
-import useColorable from './useColorable'
-import useThemeable from './useThemeable'
+import useColorable from '../../../composables/useColorable'
+import useThemeable from '../../../composables/useThemeable'
 import useTimes from './useTimes'
 import useMouse from './useMouse'
 import {
@@ -12,7 +12,7 @@ import {
   createNativeLocaleFormatter,
   getStartOfWeek,
   getEndOfWeek
-} from '../components/VCalendar/util/timestamp'
+} from '../util/timestamp'
 
 export default function useCalendarBase (props: any, { emit }) {
   const { setTextColor } = useColorable(props)
@@ -77,4 +77,3 @@ export default function useCalendarBase (props: any, { emit }) {
     getMouseEventHandlers
   }
 }
-

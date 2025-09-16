@@ -62,4 +62,3 @@ export default function useMouse (emit: (e: string, value?: any) => void) {
 
   return { getMouseEventHandlers, getDefaultMouseEventHandlers }
 }
-

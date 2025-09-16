@@ -5,7 +5,7 @@ import '@/css/vuetify.css'
 import { defineComponent, h, ref, computed, watch } from 'vue'
 
 // Composables
-import useCalendarBase from '../../composables/useCalendarBase'
+import useCalendarBase from './composables/useCalendarBase'
 
 // Util
 import props from './util/props'

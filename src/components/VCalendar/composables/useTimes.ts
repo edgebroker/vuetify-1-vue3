@@ -1,5 +1,5 @@
 import { ref, computed, watch, onMounted } from 'vue'
-import { VTimestamp, parseTimestamp, parseDate } from '../components/VCalendar/util/timestamp'
+import { VTimestamp, parseTimestamp, parseDate } from '../util/timestamp'
 
 export interface TimesProps {
   now?: string
@@ -57,4 +57,3 @@ export default function useTimes (props: TimesProps) {
 
   return { times, parsedNow, setPresent, updateTimes, getNow, updateDay, updateTime }
 }
-
