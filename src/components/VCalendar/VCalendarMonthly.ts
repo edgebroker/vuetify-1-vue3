@@ -16,7 +16,7 @@ const monthlyProps = {
   ...props.weeks
 }
 
-export default defineComponent({
+export const VCalendarMonthly = defineComponent({
   name: 'v-calendar-monthly',
 
   props: monthlyProps,
@@ -32,4 +32,6 @@ export default defineComponent({
     }, slots)
   }
 })
+
+export default VCalendarMonthly
 

@@ -18,7 +18,7 @@ const dailyProps = {
   ...props.intervals
 }
 
-export default defineComponent({
+export const VCalendarDaily = defineComponent({
   name: 'v-calendar-daily',
 
   directives: { Resize },
@@ -46,4 +46,6 @@ export default defineComponent({
     }, slots.default?.())
   }
 })
+
+export default VCalendarDaily
 

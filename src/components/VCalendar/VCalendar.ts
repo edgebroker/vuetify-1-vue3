@@ -39,7 +39,7 @@ const calendarProps = {
   ...props.calendar
 }
 
-export default defineComponent({
+export const VCalendar = defineComponent({
   name: 'v-calendar',
 
   props: calendarProps,
@@ -188,4 +188,6 @@ export default defineComponent({
     }
   }
 })
+
+export default VCalendar
 
