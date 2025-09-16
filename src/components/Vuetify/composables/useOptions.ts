@@ -1,4 +1,4 @@
-import { VuetifyOptions } from '../../../../types'
+import { VuetifyOptions } from '../../../types'
 
 const OPTIONS_DEFAULTS = {
   minifyTheme: null,
