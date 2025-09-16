@@ -18,7 +18,7 @@ import ThemeProvider from '../../util/ThemeProvider'
 import { consoleError } from '../../util/console'
 
 // Types
-import { defineComponent, h, ref, computed, watch, nextTick, onMounted, withDirectives, vShow } from 'vue'
+import { defineComponent, h, ref, computed, watch, nextTick, onMounted, onBeforeUnmount, withDirectives, vShow } from 'vue'
 
 export default defineComponent({
   name: 'v-dialog',
@@ -187,7 +187,7 @@ export default defineComponent({
           'v-dialog__activator--disabled': props.disabled
         },
         ref: activatorRef,
-        on: listeners
+        onClick: listeners.click
       }, slots.activator?.())
     }
 
@@ -216,6 +216,13 @@ export default defineComponent({
     onMounted(() => {
       if (getSlotType({ $slots: slots }, 'activator', true) === 'v-slot') {
         consoleError(`v-dialog's activator slot must be bound, try '<template #activator="data"><v-btn v-on="data.on>'`, undefined)
+      }
+    })
+
+    onBeforeUnmount(() => {
+      if (animateTimeout !== null) {
+        clearTimeout(animateTimeout)
+        animateTimeout = null
       }
     })
 

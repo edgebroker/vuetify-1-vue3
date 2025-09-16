@@ -36,9 +36,9 @@ export default defineComponent({
 
     function updatePanels (openArr: boolean[]) {
       open.value = openArr
-      for (let i = 0; i < items.length; i++) {
-        items[i].toggle(openArr && openArr[i])
-      }
+      items.forEach((item, index) => {
+        item && item.toggle(!!openArr[index])
+      })
     }
 
     function updateFromValue (v: number | number[] | null) {
@@ -55,12 +55,12 @@ export default defineComponent({
 
     function panelClick (uid: number) {
       const newOpen = props.expand ? open.value.slice() : Array(items.length).fill(false)
-      for (let i = 0; i < items.length; i++) {
-        if ((items[i] as any)._uid === uid) {
-          newOpen[i] = !open.value[i]
-          if (!props.expand) emit('input', newOpen[i] ? i : null)
-        }
-      }
+      const index = items.findIndex(item => (item as any)._uid === uid)
+      if (index === -1) return
+
+      newOpen[index] = !open.value[index]
+      if (!props.expand) emit('input', newOpen[index] ? index : null)
+
       updatePanels(newOpen)
       if (props.expand) emit('input', newOpen)
     }

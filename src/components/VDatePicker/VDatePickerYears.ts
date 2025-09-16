@@ -8,8 +8,8 @@ import useColorable, { colorProps } from '../../composables/useColorable'
 
 // Types
 import { defineComponent, h, ref, computed, onMounted } from 'vue'
-import { PropType } from 'vue'
-import { DatePickerFormatter } from './util/createNativeLocaleFormatter'
+import type { PropType, VNode } from 'vue'
+import type { DatePickerFormatter } from './util/createNativeLocaleFormatter'
 
 export default defineComponent({
   name: 'v-date-picker-years',
@@ -31,8 +31,18 @@ export default defineComponent({
     const years = ref<HTMLElement | null>(null)
     const { setTextColor } = useColorable(props)
 
-    const formatter = computed(() =>
+    const formatter = computed<DatePickerFormatter>(() =>
       props.format || createNativeLocaleFormatter(props.locale, { year: 'numeric', timeZone: 'UTC' }, { length: 4 })
+    )
+    const parsedValue = computed<number | null>(() =>
+      props.value != null ? parseInt(String(props.value), 10) : null
+    )
+    const fallbackYear = computed(() => parsedValue.value ?? new Date().getFullYear())
+    const maxYear = computed(() =>
+      props.max != null ? parseInt(String(props.max), 10) : fallbackYear.value + 100
+    )
+    const minYear = computed(() =>
+      Math.min(maxYear.value, props.min != null ? parseInt(String(props.min), 10) : fallbackYear.value - 100)
     )
 
     onMounted(() => {
@@ -50,7 +60,7 @@ export default defineComponent({
 
     function genYearItem (year: number) {
       const formatted = formatter.value(String(year))
-      const active = parseInt(String(props.value), 10) === year
+      const active = parsedValue.value === year
       const color = active && (props.color || 'primary')
 
       return h('li', setTextColor(color, {
@@ -61,12 +71,9 @@ export default defineComponent({
     }
 
     function genYearItems () {
-      const children = [] as any[]
-      const selectedYear = props.value ? parseInt(String(props.value), 10) : new Date().getFullYear()
-      const maxYear = props.max ? parseInt(String(props.max), 10) : selectedYear + 100
-      const minYear = Math.min(maxYear, props.min ? parseInt(String(props.min), 10) : selectedYear - 100)
+      const children: VNode[] = []
 
-      for (let year = maxYear; year >= minYear; year--) {
+      for (let year = maxYear.value; year >= minYear.value; year--) {
         children.push(genYearItem(year))
       }
       return children
