@@ -1,5 +1,6 @@
-import { computed } from 'vue'
-import useCalendarBase from './useCalendarBase'
+import { computed, isRef } from 'vue'
+import type { Ref } from 'vue'
+import useCalendarBase, { type CalendarBaseContext } from './useCalendarBase'
 import {
   VTimestamp,
   VTime,
@@ -12,7 +13,13 @@ import {
   createNativeLocaleFormatter
 } from '../util/timestamp'
 
-export default function useCalendarWithIntervals (props: any, context: any) {
+export interface CalendarWithIntervalsContext extends CalendarBaseContext {
+  refs?: {
+    scrollArea?: Ref<HTMLElement | undefined> | HTMLElement
+  }
+}
+
+export default function useCalendarWithIntervals (props: any, context: CalendarWithIntervalsContext) {
   const base = useCalendarBase(props, context)
 
   const parsedFirstInterval = computed(() => parseInt(props.firstInterval))
@@ -81,8 +88,8 @@ export default function useCalendarWithIntervals (props: any, context: any) {
 
   function scrollToTime (time: VTime): boolean {
     const y = timeToY(time)
-    const refOrEl: any = context.refs?.scrollArea
-    const pane: HTMLElement | undefined = refOrEl && 'value' in refOrEl ? refOrEl.value : refOrEl
+    const refOrEl = context.refs?.scrollArea
+    const pane: HTMLElement | undefined = refOrEl ? (isRef(refOrEl) ? refOrEl.value : refOrEl) : undefined
     if (y === false || !pane) return false
     pane.scrollTop = y
     return true
