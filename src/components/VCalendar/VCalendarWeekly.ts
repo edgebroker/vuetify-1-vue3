@@ -15,7 +15,7 @@ const weeklyProps = {
   ...props.weeks
 }
 
-export default defineComponent({
+export const VCalendarWeekly = defineComponent({
   name: 'v-calendar-weekly',
 
   props: weeklyProps,
@@ -33,4 +33,6 @@ export default defineComponent({
     return () => h('div', { class: classes.value }, slots.default?.())
   }
 })
+
+export default VCalendarWeekly
 

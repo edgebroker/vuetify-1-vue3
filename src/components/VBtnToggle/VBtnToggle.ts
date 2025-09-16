@@ -7,7 +7,7 @@ import useButtonGroup from '../../composables/useButtonGroup'
 // Types
 import { defineComponent, h, computed } from 'vue'
 
-export default defineComponent({
+export const VBtnToggle = defineComponent({
   name: 'v-btn-toggle',
 
   props: {
@@ -29,4 +29,6 @@ export default defineComponent({
     return () => h('div', { class: classes.value }, slots.default?.())
   }
 })
+
+export default VBtnToggle
 
