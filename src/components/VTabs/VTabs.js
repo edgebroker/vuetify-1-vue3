@@ -4,12 +4,13 @@ import "@/css/vuetify.css"
 // Extensions
 import { BaseItemGroup } from '../VItemGroup/VItemGroup'
 
-// Component level mixins
-import TabsComputed from './mixins/tabs-computed'
-import TabsGenerators from './mixins/tabs-generators'
-import TabsProps from './mixins/tabs-props'
-import TabsTouch from './mixins/tabs-touch'
-import TabsWatchers from './mixins/tabs-watchers'
+// Composables
+import { getCurrentInstance } from 'vue'
+import useTabsComputed from './composables/useTabsComputed'
+import useTabsGenerators from './composables/useTabsGenerators'
+import useTabsProps, { tabsProps } from './composables/useTabsProps'
+import useTabsTouch from './composables/useTabsTouch'
+import useTabsWatchers from './composables/useTabsWatchers'
 
 // Mixins
 import Colorable from '../../mixins/colorable'
@@ -36,13 +37,46 @@ export default BaseItemGroup.extend({
   mixins: [
     Colorable,
     SSRBootable,
-    TabsComputed,
-    TabsProps,
-    TabsGenerators,
-    TabsTouch,
-    TabsWatchers,
     Themeable
   ],
+
+  props: {
+    ...tabsProps
+  },
+
+  setup (props, { attrs }) {
+    const vm = getCurrentInstance()
+    const proxy = vm?.proxy
+
+    const propsRefs = useTabsProps(props)
+    const computedRefs = useTabsComputed(props)
+    const generators = useTabsGenerators()
+    const touchHandlers = useTabsTouch()
+
+    if (proxy) {
+      Object.defineProperties(proxy, {
+        activeTab: {
+          get: () => computedRefs.activeTab.value
+        },
+        containerStyles: {
+          get: () => computedRefs.containerStyles.value
+        },
+        hasArrows: {
+          get: () => computedRefs.hasArrows.value
+        },
+        isMobile: {
+          get: () => computedRefs.isMobile.value
+        },
+        sliderStyles: {
+          get: () => computedRefs.sliderStyles.value
+        }
+      })
+
+      Object.assign(proxy, generators, touchHandlers)
+    }
+
+    useTabsWatchers(propsRefs, attrs, computedRefs)
+  },
 
   provide () {
     return {
@@ -114,7 +148,8 @@ export default BaseItemGroup.extend({
     // painted
     init () {
       /* istanbul ignore next */
-      if (this.$listeners['input']) {
+      const hasInputListener = (this.$listeners && this.$listeners['input']) || this.$attrs?.onInput
+      if (hasInputListener) {
         deprecate('@input', '@change', this)
       }
     },
