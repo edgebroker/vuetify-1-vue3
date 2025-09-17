@@ -2,12 +2,12 @@ import "@/css/vuetify.css"
 import VuetifyComponent from './components/Vuetify'
 import * as components from './components'
 import directives from './directives'
-import { VueConstructor } from 'vue'
+import type { App, Plugin } from 'vue'
 import { Vuetify as VuetifyPlugin, VuetifyUseOptions } from './types'
 
 const Vuetify: VuetifyPlugin = {
-  install (Vue: VueConstructor, args?: VuetifyUseOptions): void {
-    Vue.use(VuetifyComponent, {
+  install (app: App, args?: VuetifyUseOptions): void {
+    app.use(VuetifyComponent as unknown as Plugin, {
       components,
       directives,
       ...args
@@ -16,8 +16,8 @@ const Vuetify: VuetifyPlugin = {
   version: __VUETIFY_VERSION__
 }
 
-if (typeof window !== 'undefined' && window.Vue) {
-  window.Vue.use(Vuetify)
+if (typeof window !== 'undefined' && window.Vue?.use) {
+  window.Vue.use(Vuetify as unknown as Plugin)
 }
 
 export default Vuetify

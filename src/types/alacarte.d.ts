@@ -1,30 +1,24 @@
 declare module 'vuetify/es5/components/Vuetify' {
-  import type { Vuetify } from 'vuetify'
-
-  const VuetifyPlugin: Vuetify
+  const VuetifyPlugin: import('vuetify').Vuetify
 
   export default VuetifyPlugin
 }
 
 declare module 'vuetify/es5/components/*' {
-  import type { ComponentOrPack } from 'vuetify'
-
   const VuetifyComponent: {
-    default: ComponentOrPack
-    [key: string]: ComponentOrPack
+    default: import('vuetify').ComponentOrPack
+    [key: string]: import('vuetify').ComponentOrPack
   }
 
   export = VuetifyComponent
 }
 
 declare module 'vuetify/es5/directives' {
-  import type { ObjectDirective } from 'vue'
-
-  const ClickOutside: ObjectDirective
-  const Ripple: ObjectDirective
-  const Resize: ObjectDirective
-  const Scroll: ObjectDirective
-  const Touch: ObjectDirective
+  const ClickOutside: import('vue').ObjectDirective
+  const Ripple: import('vue').ObjectDirective
+  const Resize: import('vue').ObjectDirective
+  const Scroll: import('vue').ObjectDirective
+  const Touch: import('vue').ObjectDirective
 
   export {
     ClickOutside,
