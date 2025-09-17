@@ -80,7 +80,16 @@ export default defineComponent({
     const proxy = instance?.proxy
 
     const maskable = useMaskable(props, context)
-    const loadable = useLoadable(props, context)
+    const {
+      input,
+      lazyValue,
+      masked,
+      maskText,
+      resetSelections,
+      setSelectionRange,
+      unmaskText
+    } = maskable
+    const { genProgress } = useLoadable(props, context)
 
     const baseGenIcon = proxy && proxy.genIcon ? proxy.genIcon.bind(proxy) : undefined
     const baseGenInputSlot = proxy && proxy.genInputSlot ? proxy.genInputSlot.bind(proxy) : undefined
@@ -105,7 +114,7 @@ export default defineComponent({
       props.fullWidth
     ))
     const isDirty = computed(() => {
-      const value = maskable.lazyValue?.value
+      const value = lazyValue?.value
       return (value != null && value.toString().length > 0) || badInput.value
     })
     const isLabelActive = computed(() => isDirty.value || dirtyTypes.includes(props.type))
@@ -130,15 +139,15 @@ export default defineComponent({
     const showLabel = computed(() => hasLabel.value && (!isSingle.value || (!isLabelActive.value && !props.placeholder && !prefixLabel.value)))
     const internalValue = computed({
       get () {
-        return maskable.lazyValue?.value
+        return lazyValue?.value
       },
       set (val) {
-        if (props.mask && maskable.lazyValue && val !== maskable.lazyValue.value) {
-          maskable.lazyValue.value = maskable.unmaskText(maskable.maskText(maskable.unmaskText(val)))
-          maskable.setSelectionRange()
-        } else if (maskable.lazyValue) {
-          maskable.lazyValue.value = val
-          emit('input', maskable.lazyValue.value)
+        if (props.mask && lazyValue && val !== lazyValue.value) {
+          lazyValue.value = unmaskText(maskText(unmaskText(val)))
+          setSelectionRange()
+        } else if (lazyValue) {
+          lazyValue.value = val
+          emit('input', lazyValue.value)
         }
       }
     })
@@ -175,7 +184,6 @@ export default defineComponent({
 
         if (proxy) proxy.hasColor = val
 
-        const lazyValue = maskable.lazyValue
         if (!lazyValue) return
 
         if (val) {
@@ -189,17 +197,16 @@ export default defineComponent({
     watch(
       () => props.value,
       val => {
-        const lazyValue = maskable.lazyValue
         if (!lazyValue) return
 
         if (props.mask && !internalChange.value) {
-          const masked = maskable.maskText(maskable.unmaskText(val))
-          lazyValue.value = maskable.unmaskText(masked)
+          const maskedText = maskText(unmaskText(val))
+          lazyValue.value = unmaskText(maskedText)
 
           if (String(val) !== lazyValue.value) {
             nextTick(() => {
-              const inputEl = maskable.input?.value || proxy?.$refs?.input
-              if (inputEl) inputEl.value = masked
+              const inputEl = input?.value || proxy?.$refs?.input
+              if (inputEl) inputEl.value = maskedText
               emit('input', lazyValue.value)
             })
           }
@@ -215,8 +222,8 @@ export default defineComponent({
 
     function blur (e) {
       window.requestAnimationFrame(() => {
-        const input = maskable.input?.value || proxy?.$refs?.input
-        input && typeof input.blur === 'function' && input.blur()
+        const inputRef = input?.value || proxy?.$refs?.input
+        inputRef && typeof inputRef.blur === 'function' && inputRef.blur()
       })
       onBlur(e)
     }
@@ -224,8 +231,8 @@ export default defineComponent({
     function clearableCallback () {
       internalValue.value = null
       nextTick(() => {
-        const input = maskable.input?.value || proxy?.$refs?.input
-        input && typeof input.focus === 'function' && input.focus()
+        const inputRef = input?.value || proxy?.$refs?.input
+        inputRef && typeof inputRef.focus === 'function' && inputRef.focus()
       })
     }
 
@@ -321,7 +328,7 @@ export default defineComponent({
         genTextFieldSlot(),
         genClearIcon(),
         genIconSlot(),
-        loadable.genProgress()
+        genProgress()
       ]
     }
 
@@ -353,7 +360,7 @@ export default defineComponent({
       const data = {
         style: {},
         domProps: {
-          value: maskable.maskText(maskable.lazyValue?.value)
+          value: maskText(lazyValue?.value)
         },
         attrs: {
           'aria-label': (!attrs || !attrs.id) && props.label,
@@ -373,7 +380,7 @@ export default defineComponent({
       }
 
       if (props.placeholder) data.attrs.placeholder = props.placeholder
-      if (props.mask) data.attrs.maxlength = maskable.masked?.value?.length
+      if (props.mask) data.attrs.maxlength = masked?.value?.length
       if (props.browserAutocomplete) data.attrs.autocomplete = props.browserAutocomplete
 
       return h('input', data)
@@ -418,16 +425,16 @@ export default defineComponent({
     function onClick () {
       if (proxy?.isFocused || props.disabled) return
 
-      const input = maskable.input?.value || proxy?.$refs?.input
-      input && typeof input.focus === 'function' && input.focus()
+      const inputRef = input?.value || proxy?.$refs?.input
+      inputRef && typeof inputRef.focus === 'function' && inputRef.focus()
     }
 
     function onFocus (e) {
-      const input = maskable.input?.value || proxy?.$refs?.input
-      if (!input) return
+      const inputRef = input?.value || proxy?.$refs?.input
+      if (!inputRef) return
 
-      if (document.activeElement !== input) {
-        return input.focus()
+      if (document.activeElement !== inputRef) {
+        return inputRef.focus()
       }
 
       if (!proxy?.isFocused) {
@@ -438,7 +445,7 @@ export default defineComponent({
 
     function onInput (e) {
       internalChange.value = true
-      props.mask && maskable.resetSelections(e.target)
+      props.mask && resetSelections(e.target)
       internalValue.value = e.target.value
       badInput.value = e.target.validity && e.target.validity.badInput
     }
@@ -452,8 +459,8 @@ export default defineComponent({
     }
 
     function onMouseDown (e) {
-      const input = maskable.input?.value || proxy?.$refs?.input
-      if (e.target !== input) {
+      const inputRef = input?.value || proxy?.$refs?.input
+      if (e.target !== inputRef) {
         e.preventDefault()
         e.stopPropagation()
       }
@@ -469,7 +476,7 @@ export default defineComponent({
 
     return {
       ...maskable,
-      ...loadable,
+      genProgress,
       badInput,
       initialValue,
       internalChange,
