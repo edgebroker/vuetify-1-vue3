@@ -1,26 +1,55 @@
 import { getCurrentInstance, ref, computed, watch, onMounted, onActivated, onDeactivated, onBeforeUnmount, unref } from 'vue'
+import type { ComputedRef, ComponentInternalInstance, ComponentPublicInstance, Ref } from 'vue'
 
-export default function useApplicationable (props, value, events = [], options = {}) {
-  const vm = getCurrentInstance()
-  const app = ref(props.app)
-  let updateFn = typeof options.updateApplication === 'function'
+type ApplicationPropertySource = string | Ref<string> | ComputedRef<string>
+
+interface UseApplicationableOptions {
+  updateApplication?: () => number
+}
+
+interface ApplicationFramework {
+  bind: (uid: number, target: string, value: number) => void
+  unbind: (uid: number, target: string) => void
+}
+
+type ApplicationableProxy = ComponentPublicInstance & {
+  $vuetify: {
+    application: ApplicationFramework
+  }
+}
+
+type ApplicationableProps = Record<string, unknown> & {
+  app?: boolean
+}
+
+export default function useApplicationable<P extends ApplicationableProps> (
+  props: P,
+  value: ApplicationPropertySource,
+  events: Array<keyof P & string> = [],
+  options: UseApplicationableOptions = {}
+) {
+  const vm = getCurrentInstance() as ComponentInternalInstance | null
+  const proxy = vm?.proxy as ApplicationableProxy | undefined
+  const app = ref(Boolean(props.app))
+
+  let updateFn: () => number = typeof options.updateApplication === 'function'
     ? options.updateApplication
     : () => 0
 
   watch(() => props.app, val => {
-    app.value = val
+    app.value = Boolean(val)
   })
 
-  const applicationProperty = computed(() => unref(value))
+  const applicationProperty = computed<string>(() => unref(value))
 
   function updateApplication () {
     return updateFn()
   }
 
   function callUpdate () {
-    if (!app.value) return
+    if (!app.value || !vm || !proxy) return
 
-    vm?.proxy.$vuetify.application.bind(
+    proxy.$vuetify.application.bind(
       vm.uid,
       applicationProperty.value,
       updateApplication()
@@ -28,31 +57,35 @@ export default function useApplicationable (props, value, events = [], options =
   }
 
   function removeApplication (force = false) {
-    if (!force && !app.value) return
+    if ((!force && !app.value) || !vm || !proxy) return
 
-    vm?.proxy.$vuetify.application.unbind(
+    proxy.$vuetify.application.unbind(
       vm.uid,
       applicationProperty.value
     )
   }
 
-  function setUpdateApplication (fn) {
+  function setUpdateApplication (fn: typeof updateFn) {
     updateFn = fn
     callUpdate()
   }
 
-  watch(app, (val, prev) => {
+  watch(app, (_val, prev) => {
     if (prev) removeApplication(true)
     else callUpdate()
   })
 
-  watch(applicationProperty, (val, oldVal) => {
-    vm?.proxy.$vuetify.application.unbind(vm.uid, oldVal)
+  watch(applicationProperty, (_val, oldVal) => {
+    if (!vm || !proxy) return
+
+    proxy.$vuetify.application.unbind(vm.uid, oldVal)
     callUpdate()
   })
 
   events.forEach(event => {
-    watch(() => props[event], callUpdate)
+    watch(() => props[event], () => {
+      callUpdate()
+    })
   })
 
   onMounted(callUpdate)
