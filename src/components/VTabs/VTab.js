@@ -25,7 +25,7 @@ export default defineComponent({
   setup (props, { attrs, slots, emit, expose }) {
     const { generateRouteLink } = useRoutable(props, { attrs, emit })
     const { groupClasses, toggle, isActive, activeClass } = useTabGroupable(props, emit)
-    useThemeable(props)
+    const { themeClasses } = useThemeable(props)
 
     const linkRef = ref()
     const vm = getCurrentInstance()
@@ -34,6 +34,7 @@ export default defineComponent({
       'v-tabs__item': true,
       'v-tabs__item--disabled': props.disabled,
       ...groupClasses.value,
+      ...themeClasses.value,
     }))
 
     const value = computed(() => {
@@ -86,7 +87,7 @@ export default defineComponent({
       const tag = props.disabled ? 'div' : link.tag
       data.ref = linkRef
 
-      return h('div', { staticClass: 'v-tabs__div' }, [h(tag, data, slots.default?.())])
+      return h('div', { class: 'v-tabs__div' }, [h(tag, data, slots.default?.())])
     }
   },
 })

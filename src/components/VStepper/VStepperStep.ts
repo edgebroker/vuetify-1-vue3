@@ -54,6 +54,8 @@ export default defineComponent({
     const isActive = ref(false)
     const isInactive = ref(true)
 
+    const hasError = computed(() => props.rules.some(validate => validate() !== true))
+
     const classes = computed(() => ({
       'v-stepper__step': true,
       'v-stepper__step--active': isActive.value,
@@ -64,7 +66,22 @@ export default defineComponent({
       'error--text': hasError.value,
     }))
 
-    const hasError = computed(() => props.rules.some(validate => validate() !== true))
+    const stepColor = computed(() => {
+      return (!hasError.value && (props.complete || isActive.value)) ? props.color : false
+    })
+
+    const stepContent = computed(() => {
+      if (hasError.value) {
+        return [h(VIcon, {}, { default: () => props.errorIcon })]
+      }
+
+      if (props.complete) {
+        const icon = props.editable ? props.editIcon : props.completeIcon
+        return [h(VIcon, {}, { default: () => icon })]
+      }
+
+      return String(props.step)
+    })
 
     function toggle (step: number | string) {
       if (props.step == null) return
@@ -95,30 +112,15 @@ export default defineComponent({
     expose({ toggle, isActive, isInactive })
 
     return () => {
-      let stepContent
+      const stepNode = h('span', setBackgroundColor(stepColor.value, {
+        class: { 'v-stepper__step__step': true },
+      }), stepContent.value)
 
-      if (hasError.value) {
-        stepContent = [h(VIcon, {}, { default: () => props.errorIcon })]
-      } else if (props.complete) {
-        if (props.editable) {
-          stepContent = [h(VIcon, {}, { default: () => props.editIcon })]
-        } else {
-          stepContent = [h(VIcon, {}, { default: () => props.completeIcon })]
-        }
-      } else {
-        stepContent = String(props.step)
-      }
-
-      const color = (!hasError.value && (props.complete || isActive.value)) ? props.color : false
-      const stepNode = h('span', setBackgroundColor(color, {
-        staticClass: 'v-stepper__step__step',
-      }), stepContent)
-
-      const labelNode = h('div', { staticClass: 'v-stepper__label' }, slots.default?.())
+      const labelNode = h('div', { class: 'v-stepper__label' }, slots.default?.())
 
       const node = h('div', {
         class: classes.value,
-        on: { click: onClick },
+        onClick,
       }, [stepNode, labelNode])
 
       return withDirectives(node, [[Ripple, props.editable]])

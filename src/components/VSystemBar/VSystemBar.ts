@@ -6,7 +6,7 @@ import useColorable, { colorProps } from '../../composables/useColorable'
 import useThemeable, { themeProps } from '../../composables/useThemeable'
 
 // Types
-import { defineComponent, h, computed, getCurrentInstance, watch } from 'vue'
+import { defineComponent, h, computed } from 'vue'
 
 export default defineComponent({
   name: 'v-system-bar',
@@ -37,17 +37,12 @@ export default defineComponent({
       return props.window ? 32 : 24
     })
 
-    const application = useApplicationable(props, computed(() => 'bar'), ['height', 'window'])
-    const vm = getCurrentInstance()
-
-    watch([application.app, application.applicationProperty, computedHeight], ([app]) => {
-      if (!app || !vm?.proxy) return
-      vm.proxy.$vuetify?.application.bind(
-        vm.uid,
-        application.applicationProperty.value,
-        computedHeight.value,
-      )
-    }, { immediate: true })
+    useApplicationable(
+      props,
+      computed(() => 'bar'),
+      ['height', 'window'],
+      { updateApplication: () => computedHeight.value },
+    )
 
     const classes = computed(() => ({
       'v-system-bar--lights-out': props.lightsOut,
@@ -58,12 +53,16 @@ export default defineComponent({
       ...themeClasses.value,
     }))
 
+    const barStyles = computed(() => ({
+      height: `${computedHeight.value}px`,
+    }))
+
     return () => h('div', setBackgroundColor(props.color, {
-      staticClass: 'v-system-bar',
-      class: classes.value,
-      style: {
-        height: `${computedHeight.value}px`,
+      class: {
+        'v-system-bar': true,
+        ...classes.value,
       },
+      style: barStyles.value,
     }), slots.default?.())
   },
 })

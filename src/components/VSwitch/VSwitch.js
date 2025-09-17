@@ -47,7 +47,9 @@ export default defineComponent({
       'v-input--switch': true,
     }))
 
-    const switchData = computed(() => setTextColor(props.loading ? undefined : computedColor.value, {
+    const switchColor = computed(() => props.loading ? undefined : computedColor.value)
+
+    const switchData = computed(() => setTextColor(switchColor.value, {
       class: themeClasses.value,
     }))
 
@@ -66,21 +68,25 @@ export default defineComponent({
       ) onChange()
     }
 
+    const progressColor = computed(() => {
+      if (props.loading === true || props.loading === '') {
+        return props.color || 'primary'
+      }
+
+      return props.loading
+    })
+
     function genProgress () {
       if (props.loading === false) {
         return h(VFabTransition, {}, { default: () => [null] })
       }
-
-      const progressColor = (props.loading === true || props.loading === '')
-        ? (props.color || 'primary')
-        : props.loading
 
       const slotContent = slots.progress?.()
       const nodes = slotContent && slotContent.length
         ? slotContent
         : [h(VProgressCircular, {
           props: {
-            color: progressColor,
+            color: progressColor.value,
             size: 16,
             width: 2,
             indeterminate: true,
@@ -114,7 +120,7 @@ export default defineComponent({
 
     return () => h('div', {
       class: classes.value,
-      on: { keydown: onKeydown },
+      onKeydown,
     }, [
       genSwitch(),
       genLabel(),
