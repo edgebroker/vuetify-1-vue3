@@ -75,7 +75,7 @@ export default defineComponent({
     ...themeProps
   },
 
-  setup (props, { slots, emit, attrs }) {
+  setup (props, { slots, emit, attrs, expose }) {
     const activatorRef = ref(null)
     const activatorNode = ref(null)
     const contentRef = ref(null)
@@ -253,7 +253,7 @@ export default defineComponent({
       clearTimeout(resizeTimeout)
     })
 
-    return {
+    const exposed = {
       activatorRef,
       activatorNode,
       contentRef,
@@ -282,19 +282,21 @@ export default defineComponent({
       activate,
       deactivate
     }
-  },
 
-  render () {
-    const data = {
-      staticClass: 'v-menu',
-      class: { 'v-menu--inline': !this.fullWidth && !!this.$slots.activator },
-      directives: [{ arg: 500, name: 'resize', value: this.onResize }],
-      on: this.disableKeys ? undefined : { keydown: this.onKeyDown }
+    expose(exposed)
+
+    return () => {
+      const data = {
+        staticClass: 'v-menu',
+        class: { 'v-menu--inline': !props.fullWidth && !!slots.activator },
+        directives: [{ arg: 500, name: 'resize', value: onResize }],
+        on: props.disableKeys ? undefined : { keydown: menuKeyable.onKeyDown }
+      }
+
+      return h('div', data, [
+        menuGenerators.genActivator(),
+        h(ThemeProvider, { props: { root: true, light: props.light, dark: props.dark } }, [menuGenerators.genTransition()])
+      ])
     }
-
-    return h('div', data, [
-      this.genActivator(),
-      h(ThemeProvider, { props: { root: true, light: this.light, dark: this.dark } }, [this.genTransition()])
-    ])
   }
 })
