@@ -44,7 +44,7 @@ export default function useThemeable (props) {
     theme.isDark = val
   }, { immediate: true })
 
-  return { isDark, themeClasses, rootThemeClasses, theme }
+  return { isDark, themeClasses, rootThemeClasses, theme, rootIsDark }
 }
 
 export function functionalThemeClasses (context) {

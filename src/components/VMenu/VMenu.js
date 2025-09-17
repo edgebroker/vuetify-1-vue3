@@ -295,7 +295,13 @@ export default defineComponent({
 
       return h('div', data, [
         menuGenerators.genActivator(),
-        h(ThemeProvider, { props: { root: true, light: props.light, dark: props.dark } }, [menuGenerators.genTransition()])
+        h(ThemeProvider, {
+          root: true,
+          light: props.light,
+          dark: props.dark
+        }, {
+          default: () => menuGenerators.genTransition()
+        })
       ])
     }
   }
