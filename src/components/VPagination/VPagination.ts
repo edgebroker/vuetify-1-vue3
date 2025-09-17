@@ -91,6 +91,10 @@ export default defineComponent({
     })
 
     const isRtl = computed(() => vm?.proxy.$vuetify.rtl)
+    const isFirstPage = computed(() => props.value <= 1)
+    const isLastPage = computed(() => props.value >= props.length)
+    const previousIconName = computed(() => isRtl.value ? props.nextIcon : props.prevIcon)
+    const nextIconName = computed(() => isRtl.value ? props.prevIcon : props.nextIcon)
 
     function init () {
       selected.value = null
@@ -168,9 +172,7 @@ export default defineComponent({
       ]))
     }
 
-    watch(() => props.value, () => {
-      init()
-    })
+    watch(() => props.value, init)
 
     onMounted(() => {
       init()
@@ -178,9 +180,9 @@ export default defineComponent({
 
     return () => {
       const children = [
-        genIcon(isRtl.value ? props.nextIcon : props.prevIcon, props.value <= 1, previous),
+        genIcon(previousIconName.value, isFirstPage.value, previous),
         ...genItems(),
-        genIcon(isRtl.value ? props.prevIcon : props.nextIcon, props.value >= props.length, next)
+        genIcon(nextIconName.value, isLastPage.value, next)
       ]
 
       return h('ul', {

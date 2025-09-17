@@ -174,10 +174,12 @@ export default defineComponent({
       return isActive.value && !(vm?.isUnmounted) && reactsToClick.value
     }
 
+    const deactivateDrawer = () => { isActive.value = false }
+
     function genDirectives () {
       const directives: any[] = [{
         name: 'click-outside',
-        value: () => { isActive.value = false },
+        value: deactivateDrawer,
         args: {
           closeConditional,
           include: getOpenDependentElements
@@ -266,9 +268,7 @@ export default defineComponent({
       else removeOverlay()
     })
 
-    watch(() => props.temporary, () => {
-      callUpdate()
-    })
+    watch(() => props.temporary, callUpdate)
 
     watch(() => props.value, val => {
       if (props.permanent) return
@@ -282,25 +282,30 @@ export default defineComponent({
     })
 
     return () => {
+      const onDrawerClick = () => {
+        if (!props.miniVariant) return
+
+        emit('update:miniVariant', false)
+      }
+
+      const onDrawerTransitionEnd = (e: Event) => {
+        if (e.target !== e.currentTarget) return
+
+        emit('transitionend', e)
+
+        const resizeEvent = document.createEvent('UIEvents')
+        resizeEvent.initUIEvent('resize', true, false, window, 0)
+        window.dispatchEvent(resizeEvent)
+      }
+
       const data = {
         class: classes.value,
         style: styles.value,
         directives: genDirectives(),
         ref: drawer,
         on: {
-          click: () => {
-            if (!props.miniVariant) return
-
-            emit('update:miniVariant', false)
-          },
-          transitionend: (e: Event) => {
-            if (e.target !== e.currentTarget) return
-            emit('transitionend', e)
-
-            const resizeEvent = document.createEvent('UIEvents')
-            resizeEvent.initUIEvent('resize', true, false, window, 0)
-            window.dispatchEvent(resizeEvent)
-          }
+          click: onDrawerClick,
+          transitionend: onDrawerTransitionEnd
         }
       }
 

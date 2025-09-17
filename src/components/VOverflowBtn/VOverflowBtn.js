@@ -27,8 +27,39 @@ export default defineComponent({
     const vm = getCurrentInstance()
     const proxy = vm?.proxy
 
+    const baseOptions = VAutocomplete.options || {}
+    const baseComputed = baseOptions.computed || {}
+    const baseMethods = baseOptions.methods || {}
+    const selectMethods = (VSelect.options && VSelect.options.methods) || {}
+    const textFieldMethods = (VTextField.options && VTextField.options.methods) || {}
+
+    const getAutocompleteClasses = proxy && typeof baseComputed.classes === 'function'
+      ? baseComputed.classes.bind(proxy)
+      : undefined
+    const getIsAnyValueAllowed = proxy && typeof baseComputed.isAnyValueAllowed === 'function'
+      ? baseComputed.isAnyValueAllowed.bind(proxy)
+      : undefined
+    const getMenuProps = proxy && typeof baseComputed.$_menuProps === 'function'
+      ? baseComputed.$_menuProps.bind(proxy)
+      : undefined
+    const genAutocompleteSelections = proxy && typeof baseMethods.genSelections === 'function'
+      ? baseMethods.genSelections.bind(proxy)
+      : undefined
+    const genSelectSelections = proxy && typeof selectMethods.genSelections === 'function'
+      ? selectMethods.genSelections.bind(proxy)
+      : undefined
+    const genSelectCommaSelection = proxy && typeof selectMethods.genCommaSelection === 'function'
+      ? selectMethods.genCommaSelection.bind(proxy)
+      : undefined
+    const genTextFieldInput = proxy && typeof textFieldMethods.genInput === 'function'
+      ? textFieldMethods.genInput.bind(proxy)
+      : undefined
+    const genTextFieldLabel = proxy && typeof textFieldMethods.genLabel === 'function'
+      ? textFieldMethods.genLabel.bind(proxy)
+      : undefined
+
     const classes = computed(() => Object.assign({},
-      proxy ? VAutocomplete.options.computed.classes.call(proxy) : {},
+      getAutocompleteClasses ? getAutocompleteClasses() : {},
       {
         'v-overflow-btn': true,
         'v-overflow-btn--segmented': props.segmented,
@@ -38,7 +69,7 @@ export default defineComponent({
 
     const isAnyValueAllowed = computed(() => {
       if (props.editable) return true
-      return proxy ? VAutocomplete.options.computed.isAnyValueAllowed.call(proxy) : false
+      return getIsAnyValueAllowed ? Boolean(getIsAnyValueAllowed()) : false
     })
 
     const isSingle = computed(() => true)
@@ -49,7 +80,7 @@ export default defineComponent({
     })
 
     const menuProps = computed(() => {
-      const propsValue = proxy ? { ...VAutocomplete.options.computed.$_menuProps.call(proxy) } : {}
+      const propsValue = getMenuProps ? { ...getMenuProps() } : {}
       propsValue.transition = propsValue.transition || 'v-menu-transition'
       return propsValue
     })
@@ -57,20 +88,23 @@ export default defineComponent({
     function genSelections () {
       if (!proxy) return []
       return props.editable
-        ? VAutocomplete.options.methods.genSelections.call(proxy)
-        : VSelect.options.methods.genSelections.call(proxy)
+        ? (genAutocompleteSelections ? genAutocompleteSelections() : [])
+        : (genSelectSelections ? genSelectSelections() : [])
     }
 
     function genCommaSelection (item, index, last) {
       if (!proxy) return null
       return props.segmented
         ? genSegmentedBtn(item)
-        : VSelect.options.methods.genCommaSelection.call(proxy, item, index, last)
+        : genSelectCommaSelection
+          ? genSelectCommaSelection(item, index, last)
+          : null
     }
 
     function genInput () {
       if (!proxy) return null
-      const input = VTextField.options.methods.genInput.call(proxy)
+      const input = genTextFieldInput ? genTextFieldInput() : null
+      if (!input) return input
 
       input.data.domProps.value = props.editable ? proxy.internalSearch : ''
       input.data.attrs.readonly = !isAnyValueAllowed.value
@@ -82,7 +116,7 @@ export default defineComponent({
       if (!proxy) return null
       if (props.editable && proxy.isFocused) return null
 
-      const label = VTextField.options.methods.genLabel.call(proxy)
+      const label = genTextFieldLabel ? genTextFieldLabel() : null
       if (!label) return label
 
       label.data.style = {}
