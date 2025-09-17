@@ -37,6 +37,17 @@ export default defineComponent({
       return props.color || defaultTitleColor
     })
 
+    const bodyStyles = computed(() => {
+      if (props.fullWidth) return undefined
+
+      return {
+        width: convertToUnit(props.width)
+      }
+    })
+
+    const hasTitle = computed(() => Boolean(slots.title))
+    const hasActions = computed(() => Boolean(slots.actions))
+
     const classes = computed(() => ({
       'v-picker--landscape': props.landscape,
       'v-picker--full-width': props.fullWidth,
@@ -60,9 +71,7 @@ export default defineComponent({
       return h('div', {
         staticClass: 'v-picker__body',
         class: themeClasses.value,
-        style: props.fullWidth ? undefined : {
-          width: convertToUnit(props.width)
-        }
+        style: bodyStyles.value
       }, [genBodyTransition()])
     }
 
@@ -76,9 +85,9 @@ export default defineComponent({
       staticClass: 'v-picker v-card',
       class: classes.value
     }, [
-      slots.title ? genTitle() : null,
+      hasTitle.value ? genTitle() : null,
       genBody(),
-      slots.actions ? genActions() : null
+      hasActions.value ? genActions() : null
     ])
   }
 })

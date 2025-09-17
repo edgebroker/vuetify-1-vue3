@@ -4,6 +4,9 @@ import "@/css/vuetify.css"
 // Composables
 import useTranslatable from '../../composables/useTranslatable'
 
+// Helpers
+import { convertToUnit } from '../../util/helpers'
+
 // Types
 import { defineComponent, h, ref, computed, watch, onMounted } from 'vue'
 
@@ -59,6 +62,32 @@ export default defineComponent({
       transform: `translate(-50%, ${parallax.value}px)`
     }))
 
+    const rootStyles = computed(() => {
+      const height = convertToUnit(props.height)
+      const baseHeight = height != null ? { height } : {}
+      const incomingStyle: any = attrs.style
+
+      if (Array.isArray(incomingStyle)) {
+        return height != null
+          ? [{ height }, ...incomingStyle]
+          : incomingStyle
+      }
+
+      if (typeof incomingStyle === 'string') {
+        return height != null
+          ? [{ height }, incomingStyle]
+          : incomingStyle
+      }
+
+      if (incomingStyle != null && typeof incomingStyle === 'object') {
+        return height != null
+          ? { ...baseHeight, ...incomingStyle }
+          : incomingStyle
+      }
+
+      return baseHeight
+    })
+
     return () => {
       const imgData = {
         staticClass: 'v-parallax__image',
@@ -80,16 +109,12 @@ export default defineComponent({
         staticClass: 'v-parallax__content'
       }, slots.default?.())
 
-      const { class: classAttr, style: styleAttr, ...restAttrs } = attrs as any
-      const mergedStyle = typeof styleAttr === 'object' ? styleAttr : {}
+      const { class: classAttr, style: _styleAttr, ...restAttrs } = attrs as any
 
       return h('div', {
         staticClass: 'v-parallax',
         class: classAttr,
-        style: {
-          height: `${props.height}px`,
-          ...mergedStyle
-        },
+        style: rootStyles.value,
         ...restAttrs
       }, [container, content])
     }
