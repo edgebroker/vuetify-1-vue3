@@ -1,7 +1,7 @@
 declare module 'vuetify/lib' {
   import { Component, DirectiveOptions } from 'vue'
-  import { Vuetify } from 'vuetify'
-  import { Colors } from 'vuetify/lib/util/colors'
+  import type { Vuetify } from './index'
+  import type { Colors } from './colors'
 
   const Vuetify: Vuetify
   const colors: Colors

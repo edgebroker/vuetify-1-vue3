@@ -105,3 +105,5 @@ declare module 'vuetify/lib/util/colors' {
   const colors: Colors
   export default colors
 }
+
+export type Colors = import('vuetify/lib/util/colors').Colors
