@@ -25,7 +25,7 @@ import useColorable from '../../composables/useColorable'
 import useLoadable, { loadableProps } from '../../composables/useLoadable'
 
 // Types
-import { defineComponent } from 'vue'
+import { defineComponent, ref } from 'vue'
 
 /* @vue/component */
 export default defineComponent({
@@ -89,20 +89,23 @@ export default defineComponent({
     const { setBackgroundColor, setTextColor } = useColorable(props)
     const { genProgress } = useLoadable(props, context)
 
+    const app = ref(null)
+    const isActive = ref(false)
+    const keyPressed = ref(0)
+    const lazyValue = ref(typeof props.value !== 'undefined' ? props.value : Number(props.min))
+    const oldValue = ref(null)
+
     return {
       setBackgroundColor,
       setTextColor,
-      genProgress
+      genProgress,
+      app,
+      isActive,
+      keyPressed,
+      lazyValue,
+      oldValue
     }
   },
-
-  data: vm => ({
-    app: {},
-    isActive: false,
-    keyPressed: 0,
-    lazyValue: typeof vm.value !== 'undefined' ? vm.value : Number(vm.min),
-    oldValue: null
-  }),
 
   computed: {
     classes () {

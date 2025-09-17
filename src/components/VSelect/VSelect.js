@@ -22,7 +22,7 @@ import { camelize, getPropertyFromItem, keyCodes } from '../../util/helpers'
 import { consoleError, consoleWarn } from '../../util/console'
 
 // Types
-import { defineComponent } from 'vue'
+import { defineComponent, reactive, ref, watch } from 'vue'
 
 export const defaultMenuProps = {
   closeOnClick: false,
@@ -101,31 +101,43 @@ export default defineComponent({
     const { valueComparator } = useComparable(props)
     const { noDataText } = useFilterable(props)
 
+    const attrsInput = reactive({ role: 'combobox' })
+    const cachedItems = ref(props.cacheItems ? props.items.slice() : [])
+    const content = ref(null)
+    const isBooted = ref(false)
+    const isMenuActive = ref(false)
+    const lastItem = ref(20)
+    const lazyValue = ref(props.value !== undefined
+      ? props.value
+      : props.multiple ? [] : undefined)
+    const selectedIndex = ref(-1)
+    const selectedItems = ref([])
+    const keyboardLookupPrefix = ref('')
+    const keyboardLookupLastTime = ref(0)
+
+    watch(() => props.value, val => {
+      lazyValue.value = val !== undefined
+        ? val
+        : (props.multiple ? [] : undefined)
+    })
+
     return {
       setTextColor,
       valueComparator,
-      noDataText
+      noDataText,
+      attrsInput,
+      cachedItems,
+      content,
+      isBooted,
+      isMenuActive,
+      lastItem,
+      lazyValue,
+      selectedIndex,
+      selectedItems,
+      keyboardLookupPrefix,
+      keyboardLookupLastTime
     }
   },
-
-  data: vm => ({
-    attrsInput: { role: 'combobox' },
-    cachedItems: vm.cacheItems ? vm.items : [],
-    content: null,
-    isBooted: false,
-    isMenuActive: false,
-    lastItem: 20,
-    // As long as a value is defined, show it
-    // Otherwise, check if multiple
-    // to determine which default to provide
-    lazyValue: vm.value !== undefined
-      ? vm.value
-      : vm.multiple ? [] : undefined,
-    selectedIndex: -1,
-    selectedItems: [],
-    keyboardLookupPrefix: '',
-    keyboardLookupLastTime: 0
-  }),
 
   computed: {
     /* All items that the select has */
