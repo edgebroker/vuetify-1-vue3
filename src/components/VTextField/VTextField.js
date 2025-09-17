@@ -75,7 +75,7 @@ export default defineComponent({
   },
 
   setup (props, context) {
-    const { attrs, emit, slots } = context
+    const { attrs, emit, slots, expose } = context
     const instance = getCurrentInstance()
     const proxy = instance?.proxy
 
@@ -474,6 +474,17 @@ export default defineComponent({
       baseOnMouseUp && baseOnMouseUp(e)
     }
 
+    const exposed = {
+      focus,
+      blur,
+      genInput,
+      genLabel,
+      onInput,
+      onKeyDown
+    }
+
+    expose(exposed)
+
     return {
       ...maskable,
       genProgress,
@@ -531,49 +542,32 @@ export function useTextFieldController () {
     throw new Error('[Vuetify] useTextFieldController must be called from within setup()')
   }
 
-  const findBaseComponent = () => {
-    let component = instance && instance.type
-    if (!component) return undefined
-    component = component.extends || component.super
-    return component
-  }
+  const exposed = instance && instance.exposed
 
-  const findBaseMethod = method => {
-    let component = findBaseComponent()
+  const createHandler = method => {
+    const handler = exposed && typeof exposed[method] === 'function'
+      ? exposed[method]
+      : undefined
 
-    while (component) {
-      const options = component.options || component
-      const methods = options && options.methods
+    if (handler) {
+      return handler
+    }
 
-      if (methods && typeof methods[method] === 'function') {
-        return methods[method]
-      }
+    const fallback = proxy && proxy[method]
 
-      component = component.extends || component.super
+    if (typeof fallback === 'function') {
+      return (...args) => fallback.apply(proxy, args)
     }
 
     return undefined
   }
 
-  const call = method => (...args) => {
-    const target = proxy[method]
-    return typeof target === 'function' ? target.apply(proxy, args) : undefined
-  }
-
-  const callBase = method => (...args) => {
-    const target = findBaseMethod(method)
-    return typeof target === 'function' ? target.apply(proxy, args) : undefined
-  }
-
   return {
-    genInput: call('genInput'),
-    genLabel: call('genLabel'),
-    onInput: call('onInput'),
-    onKeyDown: call('onKeyDown'),
-    base: {
-      genInput: callBase('genInput'),
-      onInput: callBase('onInput'),
-      onKeyDown: callBase('onKeyDown')
-    }
+    focus: createHandler('focus'),
+    blur: createHandler('blur'),
+    genInput: createHandler('genInput'),
+    genLabel: createHandler('genLabel'),
+    onInput: createHandler('onInput'),
+    onKeyDown: createHandler('onKeyDown')
   }
 }
