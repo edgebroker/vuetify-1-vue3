@@ -1,16 +1,16 @@
 declare module 'vuetify/lib' {
-  import { Component, DirectiveOptions } from 'vue'
+  import type { Component, ObjectDirective } from 'vue'
   import type { Vuetify } from './index'
   import type { Colors } from './colors'
 
   const Vuetify: Vuetify
   const colors: Colors
   const directives: {
-    ClickOutside: DirectiveOptions,
-    Ripple: DirectiveOptions,
-    Resize: DirectiveOptions,
-    Scroll: DirectiveOptions,
-    Touch: DirectiveOptions
+    ClickOutside: ObjectDirective,
+    Ripple: ObjectDirective,
+    Resize: ObjectDirective,
+    Scroll: ObjectDirective,
+    Touch: ObjectDirective
   }
   const VAlert: Component
   const VApp: Component

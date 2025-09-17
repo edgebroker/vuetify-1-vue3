@@ -1,32 +1,30 @@
 declare module 'vuetify/es5/components/Vuetify' {
-  import Vuetify from 'vuetify'
+  import type { Vuetify } from 'vuetify'
 
-  export default Vuetify
+  const VuetifyPlugin: Vuetify
+
+  export default VuetifyPlugin
 }
 
 declare module 'vuetify/es5/components/*' {
-  import { ComponentOrPack } from 'vuetify'
-  import { VueConstructor } from 'vue'
+  import type { ComponentOrPack } from 'vuetify'
 
   const VuetifyComponent: {
-    // FIX: The & VueConstructor is a lie.
-    // This might not be a valid component.
-    // But registering arbitrary objects as components is the status quo.
-    default: ComponentOrPack & VueConstructor
-    [key: string]: ComponentOrPack & VueConstructor
+    default: ComponentOrPack
+    [key: string]: ComponentOrPack
   }
 
   export = VuetifyComponent
 }
 
 declare module 'vuetify/es5/directives' {
-  import { DirectiveOptions, PluginFunction } from 'vue'
+  import type { ObjectDirective } from 'vue'
 
-  const ClickOutside: DirectiveOptions
-  const Ripple: DirectiveOptions
-  const Resize: DirectiveOptions
-  const Scroll: DirectiveOptions
-  const Touch: DirectiveOptions
+  const ClickOutside: ObjectDirective
+  const Ripple: ObjectDirective
+  const Resize: ObjectDirective
+  const Scroll: ObjectDirective
+  const Touch: ObjectDirective
 
   export {
     ClickOutside,

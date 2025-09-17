@@ -1,4 +1,9 @@
-import Vue, { Component, PluginFunction, PluginObject, VueConstructor, DirectiveFunction, DirectiveOptions } from 'vue'
+import type {
+  App,
+  Component,
+  ComponentPublicInstance,
+  ObjectDirective
+} from 'vue'
 import { VuetifyLanguage } from './lang'
 import './lib'
 import './alacarte'
@@ -7,15 +12,15 @@ import './colors'
 declare const Vuetify: Vuetify
 export default Vuetify
 export interface Vuetify {
-  install: PluginFunction<VuetifyUseOptions>
+  install: (app: App, options?: VuetifyUseOptions) => void
   version: string
 }
 
 export type ComponentOrPack = Component & { $_vuetify_subcomponents?: Record<string, ComponentOrPack> }
 
 export interface VuetifyUseOptions {
-  transitions?: Record<string, VueConstructor>
-  directives?: Record<string, DirectiveOptions>
+  transitions?: Record<string, Component>
+  directives?: Record<string, ObjectDirective>
   components?: Record<string, ComponentOrPack>
   /** @see https://vuetifyjs.com/style/theme */
   theme?: Partial<VuetifyTheme> | false
@@ -41,10 +46,10 @@ export interface VuetifyUseOptions {
   rtl?: boolean
 }
 
-export interface VuetifyObject extends Vue {
+export interface VuetifyObject {
   readonly breakpoint: Readonly<VuetifyBreakpoint>
   readonly dark: boolean
-  readonly goTo: <T extends string | number | HTMLElement | Vue>(target: T, options?: VuetifyGoToOptions) => Promise<T>
+  readonly goTo: <T extends string | number | HTMLElement | ComponentPublicInstance>(target: T, options?: VuetifyGoToOptions) => Promise<T>
   readonly t: VuetifyLanguage['t']
   application: VuetifyApplication
   theme: VuetifyTheme
@@ -54,8 +59,8 @@ export interface VuetifyObject extends Vue {
   rtl: boolean
 }
 
-declare module 'vue/types/vue' {
-  export interface Vue {
+declare module 'vue' {
+  interface ComponentCustomProperties {
     $vuetify: VuetifyObject
   }
 }
@@ -200,7 +205,7 @@ export type VuetifyGoToEasing =
   'easeInOutQuint'
 
 export interface VuetifyGoToOptions {
-  container?: string | HTMLElement | Vue,
+  container?: string | HTMLElement | ComponentPublicInstance,
   duration?: number
   offset?: number
   easing?: VuetifyGoToEasing,
