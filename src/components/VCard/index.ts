@@ -1,10 +1,35 @@
-import { createSimpleFunctional } from '../../util/helpers'
+import { defineComponent, h } from 'vue'
 import VCard from './VCard'
 import VCardMedia from './VCardMedia'
 import VCardTitle from './VCardTitle'
 
-const VCardActions = createSimpleFunctional('v-card__actions')
-const VCardText = createSimpleFunctional('v-card__text')
+const VCardActions = defineComponent({
+  name: 'VCardActions',
+
+  setup (_, { attrs, slots }) {
+    return () => {
+      const { class: className, ...restAttrs } = attrs as any
+      return h('div', {
+        ...restAttrs,
+        class: ['v-card__actions', className]
+      }, slots.default?.())
+    }
+  }
+})
+
+const VCardText = defineComponent({
+  name: 'VCardText',
+
+  setup (_, { attrs, slots }) {
+    return () => {
+      const { class: className, ...restAttrs } = attrs as any
+      return h('div', {
+        ...restAttrs,
+        class: ['v-card__text', className]
+      }, slots.default?.())
+    }
+  }
+})
 
 export { VCard, VCardMedia, VCardTitle, VCardActions, VCardText }
 
