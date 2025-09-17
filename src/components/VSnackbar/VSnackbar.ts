@@ -4,9 +4,9 @@ import useColorable, { colorProps } from '../../composables/useColorable'
 import useToggleable from '../../composables/useToggleable'
 import usePositionable, { positionPropsFactory } from '../../composables/usePositionable'
 
-import { defineComponent, h, computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { defineComponent, h, computed, ref, watchEffect, onBeforeUnmount } from 'vue'
 
-export default defineComponent({
+const VSnackbar = defineComponent({
   name: 'v-snackbar',
 
   props: {
@@ -30,38 +30,28 @@ export default defineComponent({
     const { isActive } = useToggleable(props, emit)
     const { positionClasses } = usePositionable(props, ['absolute', 'top', 'bottom', 'left', 'right'])
 
-    const activeTimeout = ref<number>(-1)
+    const activeTimeout = ref<number | undefined>()
 
-    function clearActiveTimeout () {
-      window.clearTimeout(activeTimeout.value)
-      activeTimeout.value = -1
-    }
-
-    function setActiveTimeout () {
-      clearActiveTimeout()
-
-      if (isActive.value && props.timeout) {
-        activeTimeout.value = window.setTimeout(() => {
-          isActive.value = false
-        }, props.timeout)
+    const clearActiveTimeout = () => {
+      if (activeTimeout.value != null) {
+        window.clearTimeout(activeTimeout.value)
+        activeTimeout.value = undefined
       }
     }
 
-    watch(isActive, () => {
-      setActiveTimeout()
-    })
-
-    watch(() => props.timeout, () => {
-      if (isActive.value) setActiveTimeout()
-    })
-
-    onMounted(() => {
-      setActiveTimeout()
-    })
-
-    onBeforeUnmount(() => {
+    watchEffect(onInvalidate => {
       clearActiveTimeout()
+
+      if (!isActive.value || !props.timeout) return
+
+      activeTimeout.value = window.setTimeout(() => {
+        isActive.value = false
+      }, props.timeout)
+
+      onInvalidate(clearActiveTimeout)
     })
+
+    onBeforeUnmount(clearActiveTimeout)
 
     const classes = computed(() => ({
       'v-snack--active': isActive.value,
@@ -96,3 +86,6 @@ export default defineComponent({
     }
   }
 })
+
+export { VSnackbar }
+export default VSnackbar

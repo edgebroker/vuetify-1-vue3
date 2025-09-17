@@ -8,7 +8,7 @@ import ClickOutside from '../../directives/click-outside'
 
 import { defineComponent, h, computed, withDirectives, cloneVNode } from 'vue'
 
-export default defineComponent({
+const VSpeedDial = defineComponent({
   name: 'v-speed-dial',
 
   directives: { ClickOutside },
@@ -47,6 +47,8 @@ export default defineComponent({
       'v-speed-dial--fixed': positionClasses.value.fixed,
       [`v-speed-dial--direction-${props.direction}`]: true
     }))
+
+    const closeSpeedDial = () => { isActive.value = false }
 
     function genChildren () {
       if (!isActive.value) return []
@@ -121,7 +123,10 @@ export default defineComponent({
 
       const speedDial = h('div', data, children)
 
-      return withDirectives(speedDial, [[ClickOutside, () => { isActive.value = false }]])
+      return withDirectives(speedDial, [[ClickOutside, closeSpeedDial]])
     }
   }
 })
+
+export { VSpeedDial }
+export default VSpeedDial

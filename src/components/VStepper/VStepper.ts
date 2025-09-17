@@ -11,7 +11,7 @@ import { defineComponent, h, ref, computed, watch, nextTick, onMounted, provide 
 export type VStepperStepInstance = InstanceType<typeof VStepperStep>
 export type VStepperContentInstance = InstanceType<typeof VStepperContent>
 
-export default defineComponent({
+const VStepper = defineComponent({
   name: 'v-stepper',
 
   props: {
@@ -100,8 +100,9 @@ export default defineComponent({
     })
 
     watch(() => props.value, val => {
+      if (val == null && inputValue.value == null) return
       nextTick(() => { inputValue.value = val })
-    })
+    }, { immediate: true })
 
     watch(() => props.vertical, val => {
       for (let index = content.length - 1; index >= 0; index--) {
@@ -111,9 +112,8 @@ export default defineComponent({
     })
 
     onMounted(() => {
-      inputValue.value = props.value != null
-        ? props.value
-        : steps[0] && (steps[0] as any).step || 1
+      if (props.value != null) return
+      inputValue.value = steps[0] && (steps[0] as any).step || 1
     })
 
     return () => {
@@ -127,3 +127,6 @@ export default defineComponent({
     }
   }
 })
+
+export { VStepper }
+export default VStepper
