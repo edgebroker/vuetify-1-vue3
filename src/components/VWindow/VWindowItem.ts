@@ -1,5 +1,5 @@
 // Components
-import VWindow from './VWindow'
+import type { VWindowProvide } from './VWindow'
 
 // Directives
 import Touch from '../../directives/touch'
@@ -15,8 +15,6 @@ import { convertToUnit } from '../../util/helpers'
 // Types
 import { defineComponent, h, ref, computed, getCurrentInstance, onMounted, onBeforeUnmount } from 'vue'
 import { VNodeDirective } from 'vue/types/vnode'
-
-type VBaseWindow = InstanceType<typeof VWindow>
 
 const useWindowGroupable = groupableFactory('windowGroup', 'v-window-item', 'v-window')
 
@@ -69,7 +67,7 @@ const VWindowItem = defineComponent({
   setup (props, { slots, attrs, emit }) {
     const vm = getCurrentInstance()
     const proxy = vm?.proxy as any
-    const windowGroup = useRegistrableInject('windowGroup', 'v-window-item', 'v-window') as VBaseWindow | null
+    const windowGroup = useRegistrableInject('windowGroup', 'v-window-item', 'v-window') as VWindowProvide | null
     const { isActive } = useWindowGroupable(props, emit)
     const { isBooted, showLazyContent } = useBootable(props, { isActive })
 
@@ -77,17 +75,17 @@ const VWindowItem = defineComponent({
     const wasCancelled = ref(false)
 
     const computedTransition = computed(() => {
-      const group = windowGroup as any
+      const fallback = windowGroup?.computedTransition ?? ''
 
-      if (!group || !group.internalReverse) {
+      if (!windowGroup || !windowGroup.internalReverse) {
         return typeof props.transition !== 'undefined'
           ? props.transition || ''
-          : group?.computedTransition ?? ''
+          : fallback
       }
 
       return typeof props.reverseTransition !== 'undefined'
         ? props.reverseTransition || ''
-        : group?.computedTransition ?? ''
+        : fallback
     })
 
     if (proxy) {
@@ -166,16 +164,15 @@ const VWindowItem = defineComponent({
     }
 
     function onEnter (el: HTMLElement, transitionDone: () => void) {
-      const group = windowGroup as any
-      const booted = group?.isBooted
+      const booted = windowGroup?.isBooted
 
       if (booted) done.value = transitionDone
 
       requestAnimationFrame(() => {
         if (!computedTransition.value) return transitionDone()
 
-        if (group) {
-          group.internalHeight = convertToUnit(el.clientHeight)
+        if (windowGroup) {
+          windowGroup.internalHeight = convertToUnit(el.clientHeight)
         }
 
         !booted && setTimeout(transitionDone, 100)
