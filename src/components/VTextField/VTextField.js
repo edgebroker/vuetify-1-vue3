@@ -21,6 +21,9 @@ import {
 } from '../../util/helpers'
 import { deprecate } from '../../util/console'
 
+// Types
+import { getCurrentInstance } from 'vue'
+
 const dirtyTypes = ['color', 'file', 'time', 'date', 'datetime-local', 'week', 'month']
 
 /* @vue/component */
@@ -430,3 +433,22 @@ export default VInput.extend({
     }
   }
 })
+
+export function useTextFieldController () {
+  const instance = getCurrentInstance()
+  const proxy = instance && instance.proxy
+
+  if (!proxy) {
+    throw new Error('[Vuetify] useTextFieldController must be called from within setup()')
+  }
+
+  const call = method => (...args) => {
+    const target = proxy[method]
+    return typeof target === 'function' ? target.apply(proxy, args) : undefined
+  }
+
+  return {
+    genInput: call('genInput'),
+    genLabel: call('genLabel')
+  }
+}

@@ -1,42 +1,47 @@
+import { defineComponent, getCurrentInstance, h } from 'vue'
+
 import VTextField from './VTextField'
 import VTextarea from '../VTextarea/VTextarea'
-import rebuildSlots from '../../util/rebuildFunctionalSlots'
-import dedupeModelListeners from '../../util/dedupeModelListeners'
 import { deprecate } from '../../util/console'
 
-// TODO: remove this in v2.0
-/* @vue/component */
-const wrapper = {
-  functional: true,
+export const VTextFieldWrapper = defineComponent({
+  name: 'v-text-field',
 
-  $_wrapperFor: VTextField,
+  inheritAttrs: false,
 
   props: {
     textarea: Boolean,
     multiLine: Boolean
   },
 
-  render (h, { props, data, slots, parent }) {
-    dedupeModelListeners(data)
+  setup (props, { attrs, slots, expose }) {
+    expose()
 
-    const children = rebuildSlots(slots(), h)
+    const instance = getCurrentInstance()
+    const parent = instance?.proxy?.$parent
+    const vm = instance?.type
 
-    if (props.textarea) {
-      deprecate('<v-text-field textarea>', '<v-textarea outline>', wrapper, parent)
-    }
+    return () => {
+      const children = slots.default ? slots.default() : []
+      const forwarded = { ...attrs }
 
-    if (props.multiLine) {
-      deprecate('<v-text-field multi-line>', '<v-textarea>', wrapper, parent)
-    }
+      if (props.textarea) {
+        deprecate('<v-text-field textarea>', '<v-textarea outline>', vm, parent)
+      }
 
-    if (props.textarea || props.multiLine) {
-      data.attrs.outline = props.textarea
-      return h(VTextarea, data, children)
-    } else {
-      return h(VTextField, data, children)
+      if (props.multiLine) {
+        deprecate('<v-text-field multi-line>', '<v-textarea>', vm, parent)
+      }
+
+      if (props.textarea || props.multiLine) {
+        forwarded.outline = props.textarea || forwarded.outline
+        return h(VTextarea, forwarded, children)
+      }
+
+      return h(VTextField, forwarded, children)
     }
   }
-}
+})
 
-export { wrapper as VTextField }
-export default wrapper
+export { VTextFieldWrapper as VTextField }
+export default VTextFieldWrapper
