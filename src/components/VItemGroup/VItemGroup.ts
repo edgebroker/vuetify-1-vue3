@@ -34,6 +34,7 @@ export const BaseItemGroup = defineComponent({
     const { internalLazyValue, internalValue } = useProxyable(props, emit)
     const { themeClasses } = useThemeable(props)
     const items: any[] = []
+    const changeListeners = new WeakMap<any, (() => void) | undefined>()
     const vm = getCurrentInstance()
 
     if (props.multiple && !Array.isArray(internalValue.value)) {
@@ -50,7 +51,17 @@ export const BaseItemGroup = defineComponent({
 
     function register (item: any) {
       const index = items.push(item) - 1
-      item.$on && item.$on('change', () => onClick(item, index))
+
+      if (item?.$on) {
+        const handler = () => onClick(item, index)
+        const unregister = item.$on('change', handler)
+        if (typeof unregister === 'function') {
+          changeListeners.set(item, unregister)
+        } else if (item.$off) {
+          changeListeners.set(item, () => item.$off && item.$off('change', handler))
+        }
+      }
+
       if (props.mandatory && internalLazyValue.value == null) {
         updateMandatory()
       }
@@ -60,6 +71,9 @@ export const BaseItemGroup = defineComponent({
     function unregister (item: any) {
       const index = items.indexOf(item)
       const value = getValue(item, index)
+      const unregister = changeListeners.get(item)
+      unregister && unregister()
+      changeListeners.delete(item)
       items.splice(index, 1)
       const valueIndex = selectedValues.value.indexOf(value)
       if (valueIndex < 0) return

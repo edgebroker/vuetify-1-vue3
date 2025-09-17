@@ -17,9 +17,14 @@ export default defineComponent({
 
   emits: ['change'],
 
-  setup (props, { slots, emit }) {
+  setup (props, { slots, emit, expose }) {
     const useGroupable = useGroupableFactory('itemGroup', 'v-item', 'v-item-group')
     const { isActive, groupClasses, toggle } = useGroupable(props, emit)
+
+    expose({
+      isActive,
+      toggle,
+    })
 
     return () => {
       if (!slots.default) {

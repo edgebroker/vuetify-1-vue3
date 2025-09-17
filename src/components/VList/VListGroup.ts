@@ -10,7 +10,7 @@ import useRegistrableInject from '../../composables/useRegistrableInject'
 import { VExpandTransition } from '../transitions'
 
 // Utils
-import { defineComponent, h, computed, inject, getCurrentInstance, onMounted, onBeforeUnmount, watch } from 'vue'
+import { defineComponent, h, computed, inject, getCurrentInstance, onMounted, onBeforeUnmount, watch, ref } from 'vue'
 
 export default defineComponent({
   name: 'v-list-group',
@@ -41,6 +41,8 @@ export default defineComponent({
     const list = useRegistrableInject('list', 'v-list-group', 'v-list')
     const listClick = inject('listClick') as any
     const vm = getCurrentInstance()
+    const headerRef = ref<HTMLElement | null>(null)
+    const itemsRef = ref<HTMLElement | null>(null)
 
     onMounted(() => {
       list && list.register && vm && list.register(vm.proxy)
@@ -117,7 +119,7 @@ export default defineComponent({
       return h('div', {
         class: ['v-list__group__header', headerClasses.value],
         onClick: click,
-        ref: 'item'
+        ref: headerRef
       }, [
         genPrependIcon(),
         slots.activator?.(),
@@ -129,7 +131,7 @@ export default defineComponent({
       return h('div', {
         class: ['v-list__group__items', itemsClasses.value],
         style: { display: isActive.value ? '' : 'none' },
-        ref: 'group'
+        ref: itemsRef
       }, showLazyContent(slots.default?.()))
     }
 

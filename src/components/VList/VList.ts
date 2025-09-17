@@ -22,7 +22,7 @@ export default defineComponent({
     ...themeProps
   },
 
-  setup (props, { slots }) {
+  setup (props, { slots, expose }) {
     const { themeClasses } = useThemeable(props)
     const { children: groups } = useRegistrableProvide('list')
 
@@ -34,6 +34,11 @@ export default defineComponent({
     }
 
     provide('listClick', listClick)
+
+    expose({
+      listClick,
+      groups,
+    })
 
     const classes = computed(() => ({
       'v-list--dense': props.dense,
