@@ -2,7 +2,7 @@ declare module 'vuetify/lib' {
   type Component = import('vue').Component
   type ObjectDirective = import('vue').ObjectDirective
   type Vuetify = import('vuetify').Vuetify
-  type Colors = import('vuetify/lib/util/colors').Colors
+  type Colors = import('vuetify/util/colors').Colors
 
   const Vuetify: Vuetify
   const colors: Colors
