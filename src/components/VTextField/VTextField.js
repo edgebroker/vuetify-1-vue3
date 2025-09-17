@@ -22,7 +22,7 @@ import {
 import { deprecate } from '../../util/console'
 
 // Types
-import { computed, defineComponent, getCurrentInstance, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, defineComponent, getCurrentInstance, h, nextTick, onMounted, ref, watch } from 'vue'
 
 const dirtyTypes = ['color', 'file', 'time', 'date', 'datetime-local', 'week', 'month']
 
@@ -81,6 +81,13 @@ export default defineComponent({
 
     const maskable = useMaskable(props, context)
     const loadable = useLoadable(props, context)
+
+    const baseGenIcon = proxy && proxy.genIcon ? proxy.genIcon.bind(proxy) : undefined
+    const baseGenInputSlot = proxy && proxy.genInputSlot ? proxy.genInputSlot.bind(proxy) : undefined
+    const baseGenMessages = proxy && proxy.genMessages ? proxy.genMessages.bind(proxy) : undefined
+    const baseGenSlot = proxy && proxy.genSlot ? proxy.genSlot.bind(proxy) : undefined
+    const baseOnMouseDown = proxy && proxy.onMouseDown ? proxy.onMouseDown.bind(proxy) : undefined
+    const baseOnMouseUp = proxy && proxy.onMouseUp ? proxy.onMouseUp.bind(proxy) : undefined
 
     const badInput = ref(false)
     const initialValue = ref(null)
@@ -202,6 +209,264 @@ export default defineComponent({
       }
     )
 
+    function focus () {
+      onFocus()
+    }
+
+    function blur (e) {
+      window.requestAnimationFrame(() => {
+        const input = maskable.input?.value || proxy?.$refs?.input
+        input && typeof input.blur === 'function' && input.blur()
+      })
+      onBlur(e)
+    }
+
+    function clearableCallback () {
+      internalValue.value = null
+      nextTick(() => {
+        const input = maskable.input?.value || proxy?.$refs?.input
+        input && typeof input.focus === 'function' && input.focus()
+      })
+    }
+
+    function genAppendSlot () {
+      if (!baseGenSlot) return null
+      const slot = []
+
+      if (slots['append-outer']) {
+        slot.push(...(slots['append-outer']() || []))
+      } else if (props.appendOuterIcon && baseGenIcon) {
+        const icon = baseGenIcon('appendOuter')
+        if (icon) slot.push(icon)
+      }
+
+      return baseGenSlot('append', 'outer', slot)
+    }
+
+    function genPrependInnerSlot () {
+      if (!baseGenSlot) return null
+      const slot = []
+
+      if (slots['prepend-inner']) {
+        slot.push(...(slots['prepend-inner']() || []))
+      } else if (props.prependInnerIcon && baseGenIcon) {
+        const icon = baseGenIcon('prependInner')
+        if (icon) slot.push(icon)
+      }
+
+      return baseGenSlot('prepend', 'inner', slot)
+    }
+
+    function genIconSlot () {
+      if (!baseGenSlot) return null
+      const slot = []
+
+      if (slots.append) {
+        slot.push(...(slots.append() || []))
+      } else if (props.appendIcon && baseGenIcon) {
+        const icon = baseGenIcon('append')
+        if (icon) slot.push(icon)
+      }
+
+      return baseGenSlot('append', 'inner', slot)
+    }
+
+    function genInputSlot () {
+      if (!baseGenInputSlot) return null
+
+      const input = baseGenInputSlot()
+      const prepend = genPrependInnerSlot()
+
+      if (!prepend || !input) return input
+
+      const children = Array.isArray(input.children) ? input.children : input.children != null ? [input.children] : []
+      children.unshift(prepend)
+      input.children = children
+
+      return input
+    }
+
+    function genClearIcon () {
+      if (!props.clearable) return null
+
+      const icon = !isDirty.value
+        ? false
+        : 'clear'
+
+      if (props.clearIconCb) deprecate(':clear-icon-cb', '@click:clear', proxy)
+
+      const handler = (!proxy?.$listeners?.['click:clear'] && props.clearIconCb) || clearableCallback
+
+      if (!baseGenSlot || !baseGenIcon) return null
+
+      const iconNode = baseGenIcon(icon, handler, false)
+      return iconNode ? baseGenSlot('append', 'inner', [iconNode]) : null
+    }
+
+    function genCounter () {
+      if (props.counter === false || props.counter == null) return null
+
+      const max = props.counter === true ? attrs.maxlength : props.counter
+
+      return h(VCounter, {
+        dark: props.dark,
+        light: props.light,
+        max,
+        value: counterValue.value
+      })
+    }
+
+    function genDefaultSlot () {
+      return [
+        genTextFieldSlot(),
+        genClearIcon(),
+        genIconSlot(),
+        loadable.genProgress()
+      ]
+    }
+
+    function genLabel () {
+      if (!showLabel.value) return null
+
+      const data = {
+        absolute: true,
+        color: proxy?.validationState,
+        dark: props.dark,
+        disabled: props.disabled,
+        focused: !isSingle.value && (proxy?.isFocused || !!proxy?.validationState),
+        left: labelPosition.value.left,
+        light: props.light,
+        right: labelPosition.value.right,
+        value: labelValue.value
+      }
+
+      if (attrs.id) data.for = attrs.id
+
+      const labelSlot = slots.label
+      return h(VLabel, data, labelSlot ? { default: () => labelSlot() } : { default: () => props.label })
+    }
+
+    function genInput () {
+      const listeners = Object.assign({}, proxy?.$listeners)
+      if (listeners && listeners.change) delete listeners.change
+
+      const data = {
+        style: {},
+        domProps: {
+          value: maskable.maskText(maskable.lazyValue?.value)
+        },
+        attrs: {
+          'aria-label': (!attrs || !attrs.id) && props.label,
+          ...attrs,
+          autofocus: props.autofocus,
+          disabled: props.disabled,
+          readonly: props.readonly,
+          type: props.type
+        },
+        on: Object.assign({}, listeners, {
+          blur,
+          input: onInput,
+          focus: onFocus,
+          keydown: onKeyDown
+        }),
+        ref: 'input'
+      }
+
+      if (props.placeholder) data.attrs.placeholder = props.placeholder
+      if (props.mask) data.attrs.maxlength = maskable.masked?.value?.length
+      if (props.browserAutocomplete) data.attrs.autocomplete = props.browserAutocomplete
+
+      return h('input', data)
+    }
+
+    function genMessages () {
+      if (props.hideDetails) return null
+
+      return h('div', {
+        staticClass: 'v-text-field__details'
+      }, [
+        baseGenMessages ? baseGenMessages() : null,
+        genCounter()
+      ])
+    }
+
+    function genTextFieldSlot () {
+      return h('div', {
+        staticClass: 'v-text-field__slot'
+      }, [
+        genLabel(),
+        props.prefix ? genAffix('prefix') : null,
+        genInput(),
+        props.suffix ? genAffix('suffix') : null
+      ])
+    }
+
+    function genAffix (type) {
+      return h('div', {
+        class: `v-text-field__${type}`,
+        ref: type
+      }, props[type])
+    }
+
+    function onBlur (e) {
+      if (proxy) proxy.isFocused = false
+      internalChange.value = false
+
+      e && emit('blur', e)
+    }
+
+    function onClick () {
+      if (proxy?.isFocused || props.disabled) return
+
+      const input = maskable.input?.value || proxy?.$refs?.input
+      input && typeof input.focus === 'function' && input.focus()
+    }
+
+    function onFocus (e) {
+      const input = maskable.input?.value || proxy?.$refs?.input
+      if (!input) return
+
+      if (document.activeElement !== input) {
+        return input.focus()
+      }
+
+      if (!proxy?.isFocused) {
+        if (proxy) proxy.isFocused = true
+        emit('focus', e)
+      }
+    }
+
+    function onInput (e) {
+      internalChange.value = true
+      props.mask && maskable.resetSelections(e.target)
+      internalValue.value = e.target.value
+      badInput.value = e.target.validity && e.target.validity.badInput
+    }
+
+    function onKeyDown (e) {
+      internalChange.value = true
+
+      if (e.keyCode === keyCodes.enter) emit('change', internalValue.value)
+
+      emit('keydown', e)
+    }
+
+    function onMouseDown (e) {
+      const input = maskable.input?.value || proxy?.$refs?.input
+      if (e.target !== input) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
+
+      baseOnMouseDown && baseOnMouseDown(e)
+    }
+
+    function onMouseUp (e) {
+      if (proxy?.hasMouseDown) focus()
+
+      baseOnMouseUp && baseOnMouseUp(e)
+    }
+
     return {
       ...maskable,
       ...loadable,
@@ -224,239 +489,29 @@ export default defineComponent({
       labelValue,
       prefixWidth,
       prefixLabel,
-      textarea
-    }
-  },
-
-  methods: {
-    /** @public */
-    focus () {
-      this.onFocus()
-    },
-    /** @public */
-    blur (e) {
-      // https://github.com/vuetifyjs/vuetify/issues/5913
-      // Safari tab order gets broken if called synchronous
-      window.requestAnimationFrame(() => {
-        this.$refs.input && this.$refs.input.blur()
-      })
-      this.onBlur(e)
-    },
-    clearableCallback () {
-      this.internalValue = null
-      this.$nextTick(() => this.$refs.input.focus())
-    },
-    genAppendSlot () {
-      const slot = []
-
-      if (this.$slots['append-outer']) {
-        slot.push(this.$slots['append-outer'])
-      } else if (this.appendOuterIcon) {
-        slot.push(this.genIcon('appendOuter'))
-      }
-
-      return this.genSlot('append', 'outer', slot)
-    },
-    genPrependInnerSlot () {
-      const slot = []
-
-      if (this.$slots['prepend-inner']) {
-        slot.push(this.$slots['prepend-inner'])
-      } else if (this.prependInnerIcon) {
-        slot.push(this.genIcon('prependInner'))
-      }
-
-      return this.genSlot('prepend', 'inner', slot)
-    },
-    genIconSlot () {
-      const slot = []
-
-      if (this.$slots['append']) {
-        slot.push(this.$slots['append'])
-      } else if (this.appendIcon) {
-        slot.push(this.genIcon('append'))
-      }
-
-      return this.genSlot('append', 'inner', slot)
-    },
-    genInputSlot () {
-      const input = VInput.options.methods.genInputSlot.call(this)
-
-      const prepend = this.genPrependInnerSlot()
-      prepend && input.children.unshift(prepend)
-
-      return input
-    },
-    genClearIcon () {
-      if (!this.clearable) return null
-
-      const icon = !this.isDirty
-        ? false
-        : 'clear'
-
-      if (this.clearIconCb) deprecate(':clear-icon-cb', '@click:clear', this)
-
-      return this.genSlot('append', 'inner', [
-        this.genIcon(
-          icon,
-          (!this.$listeners['click:clear'] && this.clearIconCb) || this.clearableCallback,
-          false
-        )
-      ])
-    },
-    genCounter () {
-      if (this.counter === false || this.counter == null) return null
-
-      const max = this.counter === true ? this.$attrs.maxlength : this.counter
-
-      return this.$createElement(VCounter, {
-        props: {
-          dark: this.dark,
-          light: this.light,
-          max,
-          value: this.counterValue
-        }
-      })
-    },
-    genDefaultSlot () {
-      return [
-        this.genTextFieldSlot(),
-        this.genClearIcon(),
-        this.genIconSlot(),
-        this.genProgress()
-      ]
-    },
-    genLabel () {
-      if (!this.showLabel) return null
-
-      const data = {
-        props: {
-          absolute: true,
-          color: this.validationState,
-          dark: this.dark,
-          disabled: this.disabled,
-          focused: !this.isSingle && (this.isFocused || !!this.validationState),
-          left: this.labelPosition.left,
-          light: this.light,
-          right: this.labelPosition.right,
-          value: this.labelValue
-        }
-      }
-
-      if (this.$attrs.id) data.props.for = this.$attrs.id
-
-      return this.$createElement(VLabel, data, this.$slots.label || this.label)
-    },
-    genInput () {
-      const listeners = Object.assign({}, this.$listeners)
-      delete listeners['change'] // Change should not be bound externally
-
-      const data = {
-        style: {},
-        domProps: {
-          value: this.maskText(this.lazyValue)
-        },
-        attrs: {
-          'aria-label': (!this.$attrs || !this.$attrs.id) && this.label, // Label `for` will be set if we have an id
-          ...this.$attrs,
-          autofocus: this.autofocus,
-          disabled: this.disabled,
-          readonly: this.readonly,
-          type: this.type
-        },
-        on: Object.assign(listeners, {
-          blur: this.onBlur,
-          input: this.onInput,
-          focus: this.onFocus,
-          keydown: this.onKeyDown
-        }),
-        ref: 'input'
-      }
-
-      if (this.placeholder) data.attrs.placeholder = this.placeholder
-      if (this.mask) data.attrs.maxlength = this.masked.length
-      if (this.browserAutocomplete) data.attrs.autocomplete = this.browserAutocomplete
-
-      return this.$createElement('input', data)
-    },
-    genMessages () {
-      if (this.hideDetails) return null
-
-      return this.$createElement('div', {
-        staticClass: 'v-text-field__details'
-      }, [
-        VInput.options.methods.genMessages.call(this),
-        this.genCounter()
-      ])
-    },
-    genTextFieldSlot () {
-      return this.$createElement('div', {
-        staticClass: 'v-text-field__slot'
-      }, [
-        this.genLabel(),
-        this.prefix ? this.genAffix('prefix') : null,
-        this.genInput(),
-        this.suffix ? this.genAffix('suffix') : null
-      ])
-    },
-    genAffix (type) {
-      return this.$createElement('div', {
-        'class': `v-text-field__${type}`,
-        ref: type
-      }, this[type])
-    },
-    onBlur (e) {
-      this.isFocused = false
-      // Reset internalChange state
-      // to allow external change
-      // to persist
-      this.internalChange = false
-
-      e && this.$emit('blur', e)
-    },
-    onClick () {
-      if (this.isFocused || this.disabled) return
-
-      this.$refs.input.focus()
-    },
-    onFocus (e) {
-      if (!this.$refs.input) return
-
-      if (document.activeElement !== this.$refs.input) {
-        return this.$refs.input.focus()
-      }
-
-      if (!this.isFocused) {
-        this.isFocused = true
-        this.$emit('focus', e)
-      }
-    },
-    onInput (e) {
-      this.internalChange = true
-      this.mask && this.resetSelections(e.target)
-      this.internalValue = e.target.value
-      this.badInput = e.target.validity && e.target.validity.badInput
-    },
-    onKeyDown (e) {
-      this.internalChange = true
-
-      if (e.keyCode === keyCodes.enter) this.$emit('change', this.internalValue)
-
-      this.$emit('keydown', e)
-    },
-    onMouseDown (e) {
-      // Prevent input from being blurred
-      if (e.target !== this.$refs.input) {
-        e.preventDefault()
-        e.stopPropagation()
-      }
-
-      VInput.options.methods.onMouseDown.call(this, e)
-    },
-    onMouseUp (e) {
-      if (this.hasMouseDown) this.focus()
-
-      VInput.options.methods.onMouseUp.call(this, e)
+      textarea,
+      blur,
+      clearableCallback,
+      focus,
+      genAffix,
+      genAppendSlot,
+      genClearIcon,
+      genCounter,
+      genDefaultSlot,
+      genIconSlot,
+      genInput,
+      genInputSlot,
+      genLabel,
+      genMessages,
+      genPrependInnerSlot,
+      genTextFieldSlot,
+      onBlur,
+      onClick,
+      onFocus,
+      onInput,
+      onKeyDown,
+      onMouseDown,
+      onMouseUp
     }
   }
 })
