@@ -4,13 +4,13 @@ import "@/css/vuetify.css"
 // Extensions
 import VSlider from '../VSlider'
 
-import {
-  createRange,
-  deepEqual
-} from '../../util/helpers'
+// Utilities
+import { createRange, deepEqual } from '../../util/helpers'
 
-/* @vue/component */
-export default {
+// Types
+import { defineComponent, ref, computed, watch, getCurrentInstance } from 'vue'
+
+export default defineComponent({
   name: 'v-range-slider',
 
   extends: VSlider,
@@ -18,138 +18,158 @@ export default {
   props: {
     value: {
       type: Array,
-      default: () => ([])
-    }
+      default: () => ([]),
+    },
   },
 
-  data: vm => ({
-    activeThumb: null,
-    lazyValue: !vm.value.length
-      ? [0, 0]
-      : vm.value
-  }),
+  setup (props, { emit }) {
+    const vm = getCurrentInstance()
+    const proxy = vm && vm.proxy
 
-  computed: {
-    classes () {
-      return Object.assign({}, {
-        'v-input--range-slider': true
-      }, VSlider.options.computed.classes.call(this))
-    },
-    internalValue: {
-      get () {
-        return this.lazyValue
-      },
-      set (val) {
-        const { min, max } = this
-        // Round value to ensure the
-        // entire slider range can
-        // be selected with step
-        let value = val.map(v => this.roundValue(Math.min(Math.max(v, min), max)))
+    if (!proxy) {
+      throw new Error('[Vuetify] v-range-slider must be used within a setup context')
+    }
 
-        // Switch values if range and wrong order
+    const activeThumb = ref(null)
+    const lazyValue = ref((props.value && props.value.length) ? props.value.slice() : [0, 0])
+
+    watch(() => props.value, val => {
+      if (!val || !val.length) {
+        lazyValue.value = [0, 0]
+      } else if (!deepEqual(val, lazyValue.value)) {
+        lazyValue.value = val.slice()
+      }
+    })
+
+    const internalValue = computed({
+      get: () => lazyValue.value,
+      set: val => {
+        const min = Number(proxy.min)
+        const max = Number(proxy.max)
+        let value = val.map(v => proxy.roundValue(Math.min(Math.max(Number(v), min), max)))
+
         if (value[0] > value[1] || value[1] < value[0]) {
-          if (this.activeThumb !== null) this.activeThumb = this.activeThumb === 1 ? 0 : 1
+          if (activeThumb.value !== null) activeThumb.value = activeThumb.value === 1 ? 0 : 1
           value = [value[1], value[0]]
         }
 
-        this.lazyValue = value
-        if (!deepEqual(value, this.value)) this.$emit('input', value)
+        lazyValue.value = value
+        if (!deepEqual(value, props.value)) emit('input', value)
+        proxy.validate && proxy.validate()
+      },
+    })
 
-        this.validate()
-      }
-    },
-    inputWidth () {
-      return this.internalValue.map(v => (
-        this.roundValue(v) - this.min) / (this.max - this.min) * 100
-      )
-    },
-    isDirty () {
-      return this.internalValue.some(v => v !== this.min) || this.alwaysDirty
-    },
-    trackFillStyles () {
-      const styles = VSlider.options.computed.trackFillStyles.call(this)
-      const fillPercent = Math.abs(this.inputWidth[0] - this.inputWidth[1])
+    const inputWidth = computed(() => {
+      const min = Number(proxy.min)
+      const max = Number(proxy.max)
+      const length = max - min || 1
+      return internalValue.value.map(v => ((proxy.roundValue(v) - min) / length) * 100)
+    })
 
-      styles.width = `calc(${fillPercent}% - ${this.trackPadding}px)`
-      styles[this.$vuetify.rtl ? 'right' : 'left'] = `${this.inputWidth[0]}%`
+    const isDirty = computed(() => {
+      const min = Number(proxy.min)
+      return internalValue.value.some(v => v !== min) || proxy.alwaysDirty
+    })
 
+    const classes = computed(() => ({
+      'v-input--range-slider': true,
+      ...VSlider.options.computed.classes.call(proxy),
+    }))
+
+    const trackFillStyles = computed(() => {
+      const styles = VSlider.options.computed.trackFillStyles.call(proxy)
+      const fillPercent = Math.abs(inputWidth.value[0] - inputWidth.value[1])
+      styles.width = `calc(${fillPercent}% - ${proxy.trackPadding}px)`
+      styles[proxy.$vuetify.rtl ? 'right' : 'left'] = `${inputWidth.value[0]}%`
       return styles
-    },
-    trackPadding () {
-      if (this.isDirty ||
-        this.internalValue[0]
-      ) return 0
+    })
 
-      return VSlider.options.computed.trackPadding.call(this)
+    const trackPadding = computed(() => {
+      if (isDirty.value || internalValue.value[0]) return 0
+      return VSlider.options.computed.trackPadding.call(proxy)
+    })
+
+    function getIndexOfClosestValue (arr, v) {
+      return Math.abs(arr[0] - v) < Math.abs(arr[1] - v) ? 0 : 1
     }
-  },
 
-  methods: {
-    getIndexOfClosestValue (arr, v) {
-      if (Math.abs(arr[0] - v) < Math.abs(arr[1] - v)) return 0
-      else return 1
-    },
-    genInput () {
+    function genInput () {
       return createRange(2).map(i => {
-        const input = VSlider.options.methods.genInput.call(this)
-
-        input.data.attrs.value = this.internalValue[i]
-
-        input.data.on.focus = e => {
-          this.activeThumb = i
-          VSlider.options.methods.onFocus.call(this, e)
-        }
-
+        const input = VSlider.options.methods.genInput.call(proxy)
+        input.data = input.data || {}
+        input.data.attrs = { ...(input.data.attrs || {}), value: internalValue.value[i] }
+        input.data.on = { ...(input.data.on || {}), focus: e => {
+          activeThumb.value = i
+          VSlider.options.methods.onFocus.call(proxy, e)
+        } }
         return input
       })
-    },
-    genChildren () {
-      return [
-        this.genInput(),
-        this.genTrackContainer(),
-        this.genSteps(),
-        createRange(2).map(i => {
-          const value = this.internalValue[i]
-          const onDrag = e => {
-            this.isActive = true
-            this.activeThumb = i
-            this.onThumbMouseDown(e)
-          }
-          const valueWidth = this.inputWidth[i]
-          const isActive = (this.isFocused || this.isActive) && this.activeThumb === i
+    }
 
-          return this.genThumbContainer(value, valueWidth, isActive, onDrag)
-        })
+    function genChildren () {
+      return [
+        genInput(),
+        VSlider.options.methods.genTrackContainer.call(proxy),
+        VSlider.options.methods.genSteps.call(proxy),
+        createRange(2).map(i => {
+          const value = internalValue.value[i]
+          const onDrag = e => {
+            proxy.isActive = true
+            activeThumb.value = i
+            VSlider.options.methods.onThumbMouseDown.call(proxy, e)
+          }
+          const valueWidth = inputWidth.value[i]
+          const isActiveThumb = (proxy.isFocused || proxy.isActive) && activeThumb.value === i
+          return VSlider.options.methods.genThumbContainer.call(proxy, value, valueWidth, isActiveThumb, onDrag)
+        }),
       ]
-    },
-    onSliderClick (e) {
-      if (!this.isActive) {
-        this.isFocused = true
-        this.onMouseMove(e, true)
-        this.$emit('change', this.internalValue)
+    }
+
+    function onSliderClick (e) {
+      if (!proxy.isActive) {
+        proxy.isFocused = true
+        onMouseMove(e, true)
+        emit('change', internalValue.value)
       }
-    },
-    onMouseMove (e, trackClick = false) {
-      const { value, isInsideTrack } = this.parseMouseMove(e)
+    }
+
+    function onMouseMove (e, trackClick = false) {
+      const { value, isInsideTrack } = VSlider.options.methods.parseMouseMove.call(proxy, e)
 
       if (isInsideTrack) {
-        if (trackClick) this.activeThumb = this.getIndexOfClosestValue(this.internalValue, value)
-
-        this.setInternalValue(value)
+        if (trackClick) activeThumb.value = getIndexOfClosestValue(internalValue.value, value)
+        setInternalValue(value)
       }
-    },
-    onKeyDown (e) {
-      const value = this.parseKeyDown(e, this.internalValue[this.activeThumb])
+    }
 
+    function onKeyDown (e) {
+      const value = VSlider.options.methods.parseKeyDown.call(proxy, e, internalValue.value[activeThumb.value])
       if (value == null) return
+      setInternalValue(value)
+    }
 
-      this.setInternalValue(value)
-    },
-    setInternalValue (value) {
-      this.internalValue = this.internalValue.map((v, i) => {
-        if (i === this.activeThumb) return value
-        else return Number(v)
+    function setInternalValue (value) {
+      internalValue.value = internalValue.value.map((v, i) => {
+        return i === activeThumb.value ? value : Number(v)
       })
     }
-  }
-}
+
+    return {
+      activeThumb,
+      lazyValue,
+      internalValue,
+      inputWidth,
+      isDirty,
+      classes,
+      trackFillStyles,
+      trackPadding,
+      getIndexOfClosestValue,
+      genInput,
+      genChildren,
+      onSliderClick,
+      onMouseMove,
+      onKeyDown,
+      setInternalValue,
+    }
+  },
+})

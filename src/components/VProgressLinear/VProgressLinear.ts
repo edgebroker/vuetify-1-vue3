@@ -1,186 +1,174 @@
 import "@/css/vuetify.css"
 
-// Mixins
-import Colorable from '../../mixins/colorable'
-
 // Helpers
 import { convertToUnit } from '../../util/helpers'
-import mixins from '../../util/mixins'
+
+// Composables
+import useColorable from '../../composables/useColorable'
 
 // Types
-import { CreateElement, VNode } from 'vue'
+import { defineComponent, computed, h, useAttrs } from 'vue'
+import { PropType } from 'vue'
 
 import {
   VFadeTransition,
-  VSlideXTransition
+  VSlideXTransition,
 } from '../transitions'
 
-/* @vue/component */
-export default mixins(Colorable).extend({
+export default defineComponent({
   name: 'v-progress-linear',
 
   props: {
     active: {
       type: Boolean,
-      default: true
+      default: true,
     },
     backgroundColor: {
       type: String,
-      default: null
+      default: null,
     },
     backgroundOpacity: {
-      type: [Number, String],
-      default: null
+      type: [Number, String] as PropType<number | string>,
+      default: null,
     },
     bufferValue: {
-      type: [Number, String],
-      default: 100
+      type: [Number, String] as PropType<number | string>,
+      default: 100,
     },
     color: {
       type: String,
-      default: 'primary'
+      default: 'primary',
     },
     height: {
-      type: [Number, String],
-      default: 7
+      type: [Number, String] as PropType<number | string>,
+      default: 7,
     },
     indeterminate: Boolean,
     query: Boolean,
     value: {
-      type: [Number, String],
-      default: 0
-    }
+      type: [Number, String] as PropType<number | string>,
+      default: 0,
+    },
   },
 
-  computed: {
-    backgroundStyle (): object {
-      const backgroundOpacity = this.backgroundOpacity == null
-        ? (this.backgroundColor ? 1 : 0.3)
-        : parseFloat(this.backgroundOpacity)
+  setup (props, { slots }) {
+    const attrs = useAttrs()
+    const { setBackgroundColor } = useColorable(props)
+
+    const normalizedBuffer = computed(() => {
+      const parsed = parseFloat(String(props.bufferValue))
+      if (parsed < 0) return 0
+      if (parsed > 100) return 100
+      return isNaN(parsed) ? 0 : parsed
+    })
+
+    const normalizedValue = computed(() => {
+      const parsed = parseFloat(String(props.value))
+      if (parsed < 0) return 0
+      if (parsed > 100) return 100
+      return isNaN(parsed) ? 0 : parsed
+    })
+
+    const effectiveWidth = computed(() => {
+      if (!normalizedBuffer.value) return 0
+      return (normalizedValue.value * 100) / normalizedBuffer.value
+    })
+
+    const backgroundStyle = computed(() => {
+      const backgroundOpacity = props.backgroundOpacity == null
+        ? (props.backgroundColor ? 1 : 0.3)
+        : parseFloat(String(props.backgroundOpacity))
 
       return {
-        height: this.active ? convertToUnit(this.height) : 0,
+        height: props.active ? convertToUnit(props.height) : 0,
         opacity: backgroundOpacity,
-        width: `${this.normalizedBufer}%`
+        width: `${normalizedBuffer.value}%`,
       }
-    },
+    })
 
-    effectiveWidth (): number {
-      if (!this.normalizedBufer) {
-        return 0
+    const styles = computed(() => {
+      const style: Record<string, any> = {}
+      if (!props.active) {
+        style.height = 0
       }
-
-      return +this.normalizedValue * 100 / +this.normalizedBufer
-    },
-
-    normalizedBufer (): number {
-      if (this.bufferValue < 0) {
-        return 0
+      if (!props.indeterminate && parseFloat(String(normalizedBuffer.value)) !== 100) {
+        style.width = `${normalizedBuffer.value}%`
       }
+      return style
+    })
 
-      if (this.bufferValue > 100) {
-        return 100
-      }
-
-      return parseFloat(this.bufferValue)
-    },
-
-    normalizedValue (): number {
-      if (this.value < 0) {
-        return 0
-      }
-
-      if (this.value > 100) {
-        return 100
-      }
-
-      return parseFloat(this.value)
-    },
-
-    styles (): object {
-      const styles: Record<string, any> = {}
-
-      if (!this.active) {
-        styles.height = 0
-      }
-
-      if (!this.indeterminate && parseFloat(this.normalizedBufer) !== 100) {
-        styles.width = `${this.normalizedBufer}%`
-      }
-
-      return styles
+    function genDeterminate () {
+      return h('div', setBackgroundColor(props.color, {
+        class: 'v-progress-linear__bar__determinate',
+        style: { width: `${effectiveWidth.value}%` },
+      }))
     }
-  },
 
-  methods: {
-    genDeterminate (h: CreateElement): VNode {
-      return h('div', this.setBackgroundColor(this.color, {
-        ref: 'front',
-        staticClass: `v-progress-linear__bar__determinate`,
-        style: {
-          width: `${this.effectiveWidth}%`
-        }
-      }))
-    },
-    genBar (h: CreateElement, name: string): VNode {
-      return h('div', this.setBackgroundColor(this.color, {
-        staticClass: 'v-progress-linear__bar__indeterminate',
+    function genBar (name: string) {
+      return h('div', setBackgroundColor(props.color, {
         class: {
-          [name]: true
-        }
+          'v-progress-linear__bar__indeterminate': true,
+          [name]: true,
+        },
       }))
-    },
-    genIndeterminate (h: CreateElement): VNode {
+    }
+
+    function genIndeterminate () {
       return h('div', {
-        ref: 'front',
-        staticClass: 'v-progress-linear__bar__indeterminate',
         class: {
-          'v-progress-linear__bar__indeterminate--active': this.active
-        }
+          'v-progress-linear__bar__indeterminate': true,
+          'v-progress-linear__bar__indeterminate--active': props.active,
+        },
       }, [
-        this.genBar(h, 'long'),
-        this.genBar(h, 'short')
+        genBar('long'),
+        genBar('short'),
+      ])
+    }
+
+    return () => {
+      const fade = h(VFadeTransition, {}, {
+        default: () => props.indeterminate ? [genIndeterminate()] : [],
+      })
+      const slide = h(VSlideXTransition, {}, {
+        default: () => props.indeterminate ? [] : [genDeterminate()],
+      })
+
+      const bar = h('div', {
+        class: 'v-progress-linear__bar',
+        style: styles.value,
+      }, [fade, slide])
+
+      const background = h('div', setBackgroundColor(props.backgroundColor || props.color, {
+        class: 'v-progress-linear__background',
+        style: backgroundStyle.value,
+      }))
+
+      const content = slots.default ? h('div', { class: 'v-progress-linear__content' }, slots.default()) : null
+
+      const { class: className, style: styleAttr, ...restAttrs } = attrs as Record<string, any>
+
+      const heightStyle = convertToUnit(props.height)
+
+      return h('div', {
+        ...restAttrs,
+        class: [
+          'v-progress-linear',
+          { 'v-progress-linear--query': props.query },
+          className,
+        ],
+        style: {
+          height: heightStyle,
+          ...(styleAttr as Record<string, any> || {}),
+        },
+        role: 'progressbar',
+        'aria-valuemin': 0,
+        'aria-valuemax': normalizedBuffer.value,
+        'aria-valuenow': props.indeterminate ? undefined : normalizedValue.value,
+      }, [
+        background,
+        bar,
+        content,
       ])
     }
   },
-
-  render (h): VNode {
-    const fade = h(VFadeTransition, this.indeterminate ? [this.genIndeterminate(h)] : [])
-    const slide = h(VSlideXTransition, this.indeterminate ? [] : [this.genDeterminate(h)])
-
-    const bar = h('div', {
-      staticClass: 'v-progress-linear__bar',
-      style: this.styles
-    }, [fade, slide])
-
-    const background = h('div', this.setBackgroundColor(this.backgroundColor || this.color, {
-      staticClass: 'v-progress-linear__background',
-      style: this.backgroundStyle
-    }))
-
-    const content = this.$slots.default && h('div', {
-      staticClass: 'v-progress-linear__content'
-    }, this.$slots.default)
-
-    return h('div', {
-      staticClass: 'v-progress-linear',
-      attrs: {
-        'role': 'progressbar',
-        'aria-valuemin': 0,
-        'aria-valuemax': this.normalizedBufer,
-        'aria-valuenow': this.indeterminate ? undefined : this.normalizedValue
-      },
-      class: {
-        'v-progress-linear--query': this.query
-      },
-      style: {
-        height: convertToUnit(this.height)
-      },
-      on: this.$listeners
-    }, [
-      background,
-      bar,
-      content
-    ])
-  }
 })
