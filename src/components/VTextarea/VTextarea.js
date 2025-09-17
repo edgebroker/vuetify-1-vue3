@@ -2,12 +2,15 @@
 import "@/css/vuetify.css"
 
 // Extensions
-import VTextField from '../VTextField/VTextField'
+import VTextField, { useTextFieldController } from '../VTextField/VTextField'
 
+// Utilities
 import { consoleInfo } from '../../util/console'
 
-/* @vue/component */
-export default {
+// Types
+import { computed, defineComponent, getCurrentInstance, nextTick, onMounted, ref, watch } from 'vue'
+
+export default defineComponent({
   name: 'v-textarea',
 
   extends: VTextField,
@@ -28,83 +31,116 @@ export default {
     }
   },
 
-  computed: {
-    classes () {
-      return {
-        'v-textarea': true,
-        'v-textarea--auto-grow': this.autoGrow,
-        'v-textarea--no-resize': this.noResizeHandle,
-        ...VTextField.options.computed.classes.call(this, null)
-      }
-    },
-    dynamicHeight () {
-      return this.autoGrow
-        ? this.inputHeight
-        : 'auto'
-    },
-    isEnclosed () {
-      return this.textarea ||
-        VTextField.options.computed.isEnclosed.call(this)
-    },
-    noResizeHandle () {
-      return this.noResize || this.autoGrow
+  setup (props, { emit, expose }) {
+    expose()
+
+    const vm = getCurrentInstance()
+    const proxy = vm?.proxy
+    const baseComponent = vm?.type?.extends
+    const baseComputed = baseComponent?.options?.computed || {}
+
+    const inputHeight = ref('auto')
+
+    const textField = useTextFieldController()
+    const baseGenInput = textField.base?.genInput
+    const baseOnInput = textField.base?.onInput
+
+    const noResizeHandle = computed(() => props.noResize || props.autoGrow)
+
+    const baseClasses = computed(() => {
+      const getter = baseComputed.classes
+      return getter && proxy ? getter.call(proxy) : {}
+    })
+
+    const baseIsEnclosed = computed(() => {
+      const getter = baseComputed.isEnclosed
+      return getter && proxy ? getter.call(proxy) : false
+    })
+
+    const classes = computed(() => ({
+      ...baseClasses.value,
+      'v-textarea': true,
+      'v-textarea--auto-grow': props.autoGrow,
+      'v-textarea--no-resize': noResizeHandle.value
+    }))
+
+    const dynamicHeight = computed(() => props.autoGrow ? inputHeight.value : 'auto')
+
+    const isEnclosed = computed(() => Boolean(proxy && proxy.textarea) || baseIsEnclosed.value)
+
+    function calculateInputHeight () {
+      const input = proxy && proxy.$refs ? proxy.$refs.input : null
+      if (!input) return
+
+      input.style.height = '0px'
+      const height = input.scrollHeight
+      const minHeight = parseInt(String(props.rows), 10) * parseFloat(String(props.rowHeight))
+      const targetHeight = Math.max(minHeight, height)
+
+      inputHeight.value = `${targetHeight}px`
+      input.style.height = inputHeight.value
     }
-  },
 
-  watch: {
-    lazyValue () {
-      !this.internalChange && this.autoGrow && this.$nextTick(this.calculateInputHeight)
-    }
-  },
+    function genInput () {
+      if (!baseGenInput) return null
 
-  mounted () {
-    setTimeout(() => {
-      this.autoGrow && this.calculateInputHeight()
-    }, 0)
-
-    // TODO: remove (2.0)
-    if (this.autoGrow && this.noResize) {
-      consoleInfo('"no-resize" is now implied when using "auto-grow", and can be removed', this)
-    }
-  },
-
-  methods: {
-    calculateInputHeight () {
-      const input = this.$refs.input
-      if (input) {
-        input.style.height = 0
-        const height = input.scrollHeight
-        const minHeight = parseInt(this.rows, 10) * parseFloat(this.rowHeight)
-        // This has to be done ASAP, waiting for Vue
-        // to update the DOM causes ugly layout jumping
-        input.style.height = Math.max(minHeight, height) + 'px'
-      }
-    },
-    genInput () {
-      const input = VTextField.options.methods.genInput.call(this)
+      const input = baseGenInput()
+      if (!input || !input.data) return input
 
       input.tag = 'textarea'
-      delete input.data.attrs.type
-      input.data.attrs.rows = this.rows
+
+      const attrs = input.data.attrs || (input.data.attrs = {})
+      if ('type' in attrs) delete attrs.type
+      attrs.rows = props.rows
+
+      input.data.style = { ...(input.data.style || {}), height: dynamicHeight.value }
 
       return input
-    },
-    onInput (e) {
-      VTextField.options.methods.onInput.call(this, e)
-      this.autoGrow && this.calculateInputHeight()
-    },
-    onKeyDown (e) {
-      // Prevents closing of a
-      // dialog when pressing
-      // enter
-      if (this.isFocused &&
-        e.keyCode === 13
-      ) {
+    }
+
+    function onInput (e) {
+      baseOnInput && baseOnInput(e)
+      if (props.autoGrow) calculateInputHeight()
+    }
+
+    function onKeyDown (e) {
+      if (proxy?.isFocused && e.keyCode === 13) {
         e.stopPropagation()
       }
 
-      this.internalChange = true
-      this.$emit('keydown', e)
+      if (proxy) proxy.internalChange = true
+      emit('keydown', e)
+    }
+
+    watch(() => proxy?.lazyValue, () => {
+      if (!proxy || proxy.internalChange || !props.autoGrow) return
+      nextTick(() => calculateInputHeight())
+    })
+
+    watch(() => props.autoGrow, val => {
+      if (!val) return
+      nextTick(() => calculateInputHeight())
+    })
+
+    onMounted(() => {
+      if (props.autoGrow) {
+        nextTick(() => calculateInputHeight())
+      }
+
+      if (props.autoGrow && props.noResize) {
+        consoleInfo('"no-resize" is now implied when using "auto-grow", and can be removed', proxy)
+      }
+    })
+
+    return {
+      classes,
+      dynamicHeight,
+      isEnclosed,
+      noResizeHandle,
+      calculateInputHeight,
+      genInput,
+      onInput,
+      onKeyDown
     }
   }
-}
+})
