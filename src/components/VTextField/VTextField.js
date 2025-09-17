@@ -8,9 +8,9 @@ import VInput from '../VInput'
 import VCounter from '../VCounter'
 import VLabel from '../VLabel'
 
-// Mixins
-import Maskable from '../../mixins/maskable'
-import Loadable from '../../mixins/loadable'
+// Composables
+import useMaskable from '../../composables/useMaskable'
+import useLoadable from '../../composables/useLoadable'
 
 // Directives
 import Ripple from '../../directives/ripple'
@@ -22,17 +22,17 @@ import {
 import { deprecate } from '../../util/console'
 
 // Types
-import { getCurrentInstance } from 'vue'
+import { defineComponent, getCurrentInstance } from 'vue'
 
 const dirtyTypes = ['color', 'file', 'time', 'date', 'datetime-local', 'week', 'month']
 
 /* @vue/component */
-export default VInput.extend({
+export default defineComponent({
   name: 'v-text-field',
 
-  directives: { Ripple },
+  extends: VInput,
 
-  mixins: [Maskable, Loadable],
+  directives: { Ripple },
 
   inheritAttrs: false,
 
@@ -71,6 +71,16 @@ export default VInput.extend({
     type: {
       type: String,
       default: 'text'
+    }
+  },
+
+  setup (props, context) {
+    const maskable = useMaskable(props, context)
+    const loadable = useLoadable(props, context)
+
+    return {
+      ...maskable,
+      ...loadable
     }
   },
 
