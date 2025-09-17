@@ -36,8 +36,6 @@ export default defineComponent({
 
     const vm = getCurrentInstance()
     const proxy = vm?.proxy
-    const baseComponent = vm?.type?.extends
-    const baseComputed = baseComponent?.options?.computed || {}
 
     const inputHeight = ref('auto')
 
@@ -47,15 +45,9 @@ export default defineComponent({
 
     const noResizeHandle = computed(() => props.noResize || props.autoGrow)
 
-    const baseClasses = computed(() => {
-      const getter = baseComputed.classes
-      return getter && proxy ? getter.call(proxy) : {}
-    })
+    const baseClasses = computed(() => proxy?.classes || {})
 
-    const baseIsEnclosed = computed(() => {
-      const getter = baseComputed.isEnclosed
-      return getter && proxy ? getter.call(proxy) : false
-    })
+    const baseIsEnclosed = computed(() => proxy?.isEnclosed ?? false)
 
     const classes = computed(() => ({
       ...baseClasses.value,
