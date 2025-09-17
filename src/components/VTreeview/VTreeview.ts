@@ -15,7 +15,7 @@ import { filterTreeItems, FilterTreeItemFunction, filterTreeItem } from './util/
 
 // Types
 import { defineComponent, h, reactive, ref, computed, watch, provide, getCurrentInstance, onMounted } from 'vue'
-import { PropType } from 'vue'
+import type { PropType, Slot } from 'vue'
 
 import type { VTreeviewNodeInstance } from './VTreeviewNode'
 
@@ -78,7 +78,7 @@ export default defineComponent({
     ...themeProps
   },
 
-  setup (props, { emit, slots }) {
+  setup (props, { emit, slots, expose }) {
     const vm = getCurrentInstance()
     const nodes = reactive<Record<string | number, NodeState>>({})
     const selectedCache = ref<NodeCache>(new Set())
@@ -396,7 +396,7 @@ export default defineComponent({
       }
     })
 
-    return {
+    expose({
       nodes,
       selectedCache,
       activeCache,
@@ -411,41 +411,45 @@ export default defineComponent({
       updateOpen,
       isExcluded,
       themeClasses
-    }
-  },
+    })
 
-  render () {
-    const children = this.items.length
-      ? this.items.map((item: any) => h(VTreeviewNode, {
-        key: getObjectValueByPath(item, this.itemKey),
-        props: {
-          activatable: this.activatable,
-          activeClass: this.activeClass,
-          item,
-          selectable: this.selectable,
-          selectedColor: this.selectedColor,
-          expandIcon: this.expandIcon,
-          indeterminateIcon: this.indeterminateIcon,
-          offIcon: this.offIcon,
-          onIcon: this.onIcon,
-          loadingIcon: this.loadingIcon,
-          itemKey: this.itemKey,
-          itemText: this.itemText,
-          itemChildren: this.itemChildren,
-          loadChildren: this.loadChildren,
-          transition: this.transition,
-          openOnClick: this.openOnClick
-        },
-        scopedSlots: this.$scopedSlots
-      }))
-      : this.$slots.default
-
-    return h('div', {
-      staticClass: 'v-treeview',
-      class: {
-        'v-treeview--hoverable': this.hoverable,
-        ...this.themeClasses
+    return () => {
+      const nodeSlots: Record<string, Slot> = {}
+      for (const key in slots) {
+        if (key === 'default') continue
+        const slot = slots[key]
+        if (slot) nodeSlots[key] = slot
       }
-    }, children)
+
+      const children = props.items.length
+        ? props.items.map(item => h(VTreeviewNode, {
+          key: getObjectValueByPath(item, props.itemKey),
+          activatable: props.activatable,
+          activeClass: props.activeClass,
+          item,
+          selectable: props.selectable,
+          selectedColor: props.selectedColor,
+          expandIcon: props.expandIcon,
+          indeterminateIcon: props.indeterminateIcon,
+          offIcon: props.offIcon,
+          onIcon: props.onIcon,
+          loadingIcon: props.loadingIcon,
+          itemKey: props.itemKey,
+          itemText: props.itemText,
+          itemChildren: props.itemChildren,
+          loadChildren: props.loadChildren,
+          transition: props.transition,
+          openOnClick: props.openOnClick
+        }, nodeSlots))
+        : slots.default?.()
+
+      return h('div', {
+        staticClass: 'v-treeview',
+        class: {
+          'v-treeview--hoverable': props.hoverable,
+          ...themeClasses.value
+        }
+      }, children)
+    }
   }
 })
