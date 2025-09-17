@@ -1,4 +1,4 @@
-import VSlider from './VSlider'
+import VSlider, { useSliderController } from './VSlider'
 
-export { VSlider }
+export { VSlider, useSliderController }
 export default VSlider
