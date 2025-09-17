@@ -1,78 +1,78 @@
+import { defineComponent, getCurrentInstance, h } from 'vue'
+
 import VSelect from './VSelect'
-import VOverflowBtn from '../VOverflowBtn'
 import VAutocomplete from '../VAutocomplete'
 import VCombobox from '../VCombobox'
-import rebuildSlots from '../../util/rebuildFunctionalSlots'
-import dedupeModelListeners from '../../util/dedupeModelListeners'
+import VOverflowBtn from '../VOverflowBtn'
 import { deprecate } from '../../util/console'
 
-/* @vue/component */
-const wrapper = {
-  functional: true,
+const componentName = 'v-select'
 
-  $_wrapperFor: VSelect,
+export const VSelectWrapper = defineComponent({
+  name: componentName,
+
+  inheritAttrs: false,
 
   props: {
-    // VAutoComplete
-    /** @deprecated */
     autocomplete: Boolean,
-    /** @deprecated */
     combobox: Boolean,
     multiple: Boolean,
-    /** @deprecated */
     tags: Boolean,
-    // VOverflowBtn
-    /** @deprecated */
     editable: Boolean,
-    /** @deprecated */
     overflow: Boolean,
-    /** @deprecated */
     segmented: Boolean
   },
 
-  render (h, { props, data, slots, parent }) { // eslint-disable-line max-statements
-    dedupeModelListeners(data)
-    const children = rebuildSlots(slots(), h)
+  setup (props, { attrs, slots, expose }) {
+    expose()
 
-    if (props.autocomplete) {
-      deprecate('<v-select autocomplete>', '<v-autocomplete>', wrapper, parent)
-    }
-    if (props.combobox) {
-      deprecate('<v-select combobox>', '<v-combobox>', wrapper, parent)
-    }
-    if (props.tags) {
-      deprecate('<v-select tags>', '<v-combobox multiple>', wrapper, parent)
-    }
+    const instance = getCurrentInstance()
+    const vm = instance?.type
+    const parent = instance?.proxy?.$parent
 
-    if (props.overflow) {
-      deprecate('<v-select overflow>', '<v-overflow-btn>', wrapper, parent)
-    }
-    if (props.segmented) {
-      deprecate('<v-select segmented>', '<v-overflow-btn segmented>', wrapper, parent)
-    }
-    if (props.editable) {
-      deprecate('<v-select editable>', '<v-overflow-btn editable>', wrapper, parent)
-    }
+    return () => {
+      const children = slots.default ? slots.default() : []
+      const forwarded = { ...attrs }
 
-    data.attrs = data.attrs || {}
+      if (props.autocomplete) {
+        deprecate('<v-select autocomplete>', '<v-autocomplete>', vm, parent)
+      }
+      if (props.combobox) {
+        deprecate('<v-select combobox>', '<v-combobox>', vm, parent)
+      }
+      if (props.tags) {
+        deprecate('<v-select tags>', '<v-combobox multiple>', vm, parent)
+      }
+      if (props.overflow) {
+        deprecate('<v-select overflow>', '<v-overflow-btn>', vm, parent)
+      }
+      if (props.segmented) {
+        deprecate('<v-select segmented>', '<v-overflow-btn segmented>', vm, parent)
+      }
+      if (props.editable) {
+        deprecate('<v-select editable>', '<v-overflow-btn editable>', vm, parent)
+      }
 
-    if (props.combobox || props.tags) {
-      data.attrs.multiple = props.tags
-      return h(VCombobox, data, children)
-    } else if (props.autocomplete) {
-      data.attrs.multiple = props.multiple
-      return h(VAutocomplete, data, children)
-    } else if (props.overflow || props.segmented || props.editable) {
-      data.attrs.segmented = props.segmented
-      data.attrs.editable = props.editable
-      return h(VOverflowBtn, data, children)
-    } else {
-      data.attrs.multiple = props.multiple
-      return h(VSelect, data, children)
+      if (props.combobox || props.tags) {
+        return h(VCombobox, { ...forwarded, multiple: props.tags }, children)
+      }
+
+      if (props.autocomplete) {
+        return h(VAutocomplete, { ...forwarded, multiple: props.multiple }, children)
+      }
+
+      if (props.overflow || props.segmented || props.editable) {
+        return h(VOverflowBtn, {
+          ...forwarded,
+          segmented: props.segmented,
+          editable: props.editable
+        }, children)
+      }
+
+      return h(VSelect, { ...forwarded, multiple: props.multiple }, children)
     }
   }
-}
+})
 
-export { wrapper as VSelect }
-
-export default wrapper
+export { VSelectWrapper as VSelect }
+export default VSelectWrapper

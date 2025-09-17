@@ -2,8 +2,8 @@
 import '@/css/vuetify.css'
 
 // Extensions
-import VSelect from '../VSelect/VSelect'
 import VAutocomplete from '../VAutocomplete/VAutocomplete'
+import { useSelectController } from '../VSelect/VSelect'
 
 // Utils
 import { keyCodes } from '../../util/helpers'
@@ -29,6 +29,16 @@ export default defineComponent({
 
   setup (props) {
     const vm = getCurrentInstance().proxy
+    const {
+      hasSlot: baseHasSlot,
+      genChipSelection: baseGenChipSelection,
+      onChipInput: baseOnChipInput,
+      onEnterDown: baseOnEnterDown,
+      onKeyDown: baseOnKeyDown,
+      onTabDown: baseOnTabDown,
+      selectItem: baseSelectItem,
+      setValue: baseSetValue
+    } = useSelectController()
     const editingIndex = ref(-1)
 
     const counterValue = computed(() => {
@@ -38,7 +48,7 @@ export default defineComponent({
     })
 
     const hasSlot = computed(() => {
-      return VSelect.options.computed.hasSlot.call(vm) || vm.multiple
+      return Boolean((baseHasSlot && baseHasSlot.value) || vm.multiple)
     })
 
     const isAnyValueAllowed = computed(() => true)
@@ -69,9 +79,9 @@ export default defineComponent({
     }
 
     function genChipSelection (item, index) {
-      const chip = VSelect.options.methods.genChipSelection.call(vm, item, index)
+      const chip = baseGenChipSelection ? baseGenChipSelection(item, index) : undefined
 
-      if (vm.multiple) {
+      if (chip && vm.multiple && chip.componentOptions && chip.componentOptions.listeners) {
         chip.componentOptions.listeners.dblclick = () => {
           editingIndex.value = index
           vm.internalSearch = vm.getText(item)
@@ -79,24 +89,24 @@ export default defineComponent({
         }
       }
 
-      return chip
+      return chip || null
     }
 
     function onChipInput (item) {
-      VSelect.options.methods.onChipInput.call(vm, item)
+      baseOnChipInput && baseOnChipInput(item)
       editingIndex.value = -1
     }
 
     function onEnterDown (e) {
       e.preventDefault()
-      VSelect.options.methods.onEnterDown.call(vm)
+      baseOnEnterDown && baseOnEnterDown()
       if (vm.getMenuIndex() > -1) return
       updateSelf()
     }
 
     function onKeyDown (e) {
       const keyCode = e.keyCode
-      VSelect.options.methods.onKeyDown.call(vm, e)
+      baseOnKeyDown && baseOnKeyDown(e)
       if (vm.multiple &&
         keyCode === keyCodes.left &&
         vm.$refs.input.selectionStart === 0
@@ -115,14 +125,14 @@ export default defineComponent({
         e.stopPropagation()
         return updateTags()
       }
-      VAutocomplete.options.methods.onTabDown.call(vm, e)
+      baseOnTabDown && baseOnTabDown(e)
     }
 
     function selectItem (item) {
       if (editingIndex.value > -1) {
         updateEditing()
       } else {
-        VAutocomplete.options.methods.selectItem.call(vm, item)
+        baseSelectItem && baseSelectItem(item)
       }
     }
 
@@ -137,7 +147,7 @@ export default defineComponent({
     }
 
     function setValue (value = vm.internalSearch) {
-      VSelect.options.methods.setValue.call(vm, value)
+      baseSetValue && baseSetValue(value)
     }
 
     function updateEditing () {

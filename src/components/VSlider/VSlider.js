@@ -25,7 +25,7 @@ import useColorable from '../../composables/useColorable'
 import useLoadable, { loadableProps } from '../../composables/useLoadable'
 
 // Types
-import { defineComponent, ref } from 'vue'
+import { defineComponent, ref, getCurrentInstance, computed } from 'vue'
 
 /* @vue/component */
 export default defineComponent({
@@ -539,3 +539,33 @@ export default defineComponent({
     }
   }
 })
+
+export function useSliderController () {
+  const instance = getCurrentInstance()
+  const proxy = instance && instance.proxy
+
+  if (!proxy) {
+    throw new Error('[Vuetify] useSliderController must be called from within setup()')
+  }
+
+  const call = method => (...args) => {
+    const target = proxy[method]
+    return typeof target === 'function' ? target.apply(proxy, args) : undefined
+  }
+
+  const createComputed = getter => computed(() => getter(proxy))
+
+  return {
+    classes: createComputed(vm => vm.classes),
+    trackFillStyles: createComputed(vm => vm.trackFillStyles),
+    trackPadding: createComputed(vm => vm.trackPadding),
+    genInput: call('genInput'),
+    genTrackContainer: call('genTrackContainer'),
+    genSteps: call('genSteps'),
+    genThumbContainer: call('genThumbContainer'),
+    onFocus: call('onFocus'),
+    onThumbMouseDown: call('onThumbMouseDown'),
+    parseMouseMove: call('parseMouseMove'),
+    parseKeyDown: call('parseKeyDown')
+  }
+}

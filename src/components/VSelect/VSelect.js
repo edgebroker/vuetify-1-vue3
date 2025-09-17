@@ -22,7 +22,7 @@ import { camelize, getPropertyFromItem, keyCodes } from '../../util/helpers'
 import { consoleError, consoleWarn } from '../../util/console'
 
 // Types
-import { defineComponent, reactive, ref, watch } from 'vue'
+import { defineComponent, reactive, ref, watch, computed, getCurrentInstance } from 'vue'
 
 export const defaultMenuProps = {
   closeOnClick: false,
@@ -747,3 +747,37 @@ export default defineComponent({
     }
   }
 })
+
+export function useSelectController () {
+  const instance = getCurrentInstance()
+  const proxy = instance && instance.proxy
+
+  if (!proxy) {
+    throw new Error('[Vuetify] useSelectController must be called from within setup()')
+  }
+
+  const call = method => (...args) => {
+    const target = proxy[method]
+    return typeof target === 'function' ? target.apply(proxy, args) : undefined
+  }
+
+  const createComputed = getter => computed(() => getter(proxy))
+
+  return {
+    classes: createComputed(vm => vm.classes),
+    hasSlot: createComputed(vm => Boolean(vm.hasSlot)),
+    isAnyValueAllowed: createComputed(vm => vm.isAnyValueAllowed ?? false),
+    menuProps: createComputed(vm => vm.$_menuProps),
+    genSelections: call('genSelections'),
+    genCommaSelection: call('genCommaSelection'),
+    genChipSelection: call('genChipSelection'),
+    genInput: call('genInput'),
+    genLabel: call('genLabel'),
+    onChipInput: call('onChipInput'),
+    onEnterDown: call('onEnterDown'),
+    onKeyDown: call('onKeyDown'),
+    onTabDown: call('onTabDown'),
+    selectItem: call('selectItem'),
+    setValue: call('setValue')
+  }
+}

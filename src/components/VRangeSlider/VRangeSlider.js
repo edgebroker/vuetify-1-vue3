@@ -2,7 +2,7 @@
 import "@/css/vuetify.css"
 
 // Extensions
-import VSlider from '../VSlider'
+import VSlider, { useSliderController } from '../VSlider'
 
 // Utilities
 import { createRange, deepEqual } from '../../util/helpers'
@@ -32,6 +32,20 @@ export default defineComponent({
 
     const activeThumb = ref(null)
     const lazyValue = ref((props.value && props.value.length) ? props.value.slice() : [0, 0])
+
+    const {
+      classes: baseClasses,
+      trackFillStyles: baseTrackFillStyles,
+      trackPadding: baseTrackPadding,
+      genInput: baseGenInput,
+      genTrackContainer: baseGenTrackContainer,
+      genSteps: baseGenSteps,
+      genThumbContainer: baseGenThumbContainer,
+      onFocus: baseOnFocus,
+      onThumbMouseDown: baseOnThumbMouseDown,
+      parseMouseMove,
+      parseKeyDown
+    } = useSliderController()
 
     watch(() => props.value, val => {
       if (!val || !val.length) {
@@ -73,11 +87,11 @@ export default defineComponent({
 
     const classes = computed(() => ({
       'v-input--range-slider': true,
-      ...VSlider.options.computed.classes.call(proxy),
+      ...(baseClasses ? baseClasses.value : {})
     }))
 
     const trackFillStyles = computed(() => {
-      const styles = VSlider.options.computed.trackFillStyles.call(proxy)
+      const styles = { ...(baseTrackFillStyles ? baseTrackFillStyles.value : {}) }
       const fillPercent = Math.abs(inputWidth.value[0] - inputWidth.value[1])
       styles.width = `calc(${fillPercent}% - ${proxy.trackPadding}px)`
       styles[proxy.$vuetify.rtl ? 'right' : 'left'] = `${inputWidth.value[0]}%`
@@ -86,7 +100,7 @@ export default defineComponent({
 
     const trackPadding = computed(() => {
       if (isDirty.value || internalValue.value[0]) return 0
-      return VSlider.options.computed.trackPadding.call(proxy)
+      return baseTrackPadding ? baseTrackPadding.value : 0
     })
 
     function getIndexOfClosestValue (arr, v) {
@@ -95,12 +109,13 @@ export default defineComponent({
 
     function genInput () {
       return createRange(2).map(i => {
-        const input = VSlider.options.methods.genInput.call(proxy)
+        const input = baseGenInput ? baseGenInput() : null
+        if (!input) return input
         input.data = input.data || {}
         input.data.attrs = { ...(input.data.attrs || {}), value: internalValue.value[i] }
         input.data.on = { ...(input.data.on || {}), focus: e => {
           activeThumb.value = i
-          VSlider.options.methods.onFocus.call(proxy, e)
+          baseOnFocus && baseOnFocus(e)
         } }
         return input
       })
@@ -109,18 +124,20 @@ export default defineComponent({
     function genChildren () {
       return [
         genInput(),
-        VSlider.options.methods.genTrackContainer.call(proxy),
-        VSlider.options.methods.genSteps.call(proxy),
+        baseGenTrackContainer ? baseGenTrackContainer() : null,
+        baseGenSteps ? baseGenSteps() : null,
         createRange(2).map(i => {
           const value = internalValue.value[i]
           const onDrag = e => {
             proxy.isActive = true
             activeThumb.value = i
-            VSlider.options.methods.onThumbMouseDown.call(proxy, e)
+            baseOnThumbMouseDown && baseOnThumbMouseDown(e)
           }
           const valueWidth = inputWidth.value[i]
           const isActiveThumb = (proxy.isFocused || proxy.isActive) && activeThumb.value === i
-          return VSlider.options.methods.genThumbContainer.call(proxy, value, valueWidth, isActiveThumb, onDrag)
+          return baseGenThumbContainer
+            ? baseGenThumbContainer(value, valueWidth, isActiveThumb, onDrag)
+            : null
         }),
       ]
     }
@@ -134,7 +151,8 @@ export default defineComponent({
     }
 
     function onMouseMove (e, trackClick = false) {
-      const { value, isInsideTrack } = VSlider.options.methods.parseMouseMove.call(proxy, e)
+      const parsed = parseMouseMove ? parseMouseMove(e) : { value: null, isInsideTrack: false }
+      const { value, isInsideTrack } = parsed
 
       if (isInsideTrack) {
         if (trackClick) activeThumb.value = getIndexOfClosestValue(internalValue.value, value)
@@ -143,7 +161,9 @@ export default defineComponent({
     }
 
     function onKeyDown (e) {
-      const value = VSlider.options.methods.parseKeyDown.call(proxy, e, internalValue.value[activeThumb.value])
+      const value = parseKeyDown
+        ? parseKeyDown(e, internalValue.value[activeThumb.value])
+        : undefined
       if (value == null) return
       setInternalValue(value)
     }
