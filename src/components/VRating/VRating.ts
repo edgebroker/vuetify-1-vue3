@@ -4,6 +4,9 @@ import "@/css/vuetify.css"
 // Components
 import VIcon from '../VIcon'
 
+// Directives
+import Ripple from '../../directives/ripple'
+
 // Composables
 import useColorable from '../../composables/useColorable'
 import useDelayable from '../../composables/useDelayable'
@@ -15,8 +18,8 @@ import { sizeableProps } from '../../composables/useSizeable'
 import { createRange } from '../../util/helpers'
 
 // Types
-import { defineComponent, onBeforeUnmount } from 'vue'
-import type { VNode, VNodeDirective, VNodeChildren } from 'vue'
+import { defineComponent, computed, h, onBeforeUnmount, ref, watch, withDirectives } from 'vue'
+import type { VNode, VNodeChildren } from 'vue'
 
 type ItemSlotProps = {
   index: number
@@ -79,172 +82,152 @@ export default defineComponent({
     ...themeProps
   },
 
-  setup (props) {
+  setup (props, { slots, emit }) {
     const { setTextColor } = useColorable(props)
     const { themeClasses } = useThemeable(props)
-    const delayable = useDelayable(props)
+    const { clearDelay, runDelay } = useDelayable(props)
 
-    onBeforeUnmount(() => {
-      delayable.clearDelay()
+    const hoverIndex = ref(-1)
+    const internalValue = ref(props.value)
+
+    watch(() => props.value, val => {
+      internalValue.value = val
     })
 
-    return {
-      setTextColor,
-      themeClasses,
-      ...delayable
-    }
-  },
+    watch(internalValue, val => {
+      if (val !== props.value) emit('input', val)
+    })
 
-  data () {
-    return {
-      hoverIndex: -1,
-      internalValue: this.value
-    }
-  },
+    const iconProps = computed(() => ({
+      dark: props.dark,
+      medium: props.medium,
+      large: props.large,
+      light: props.light,
+      size: props.size,
+      small: props.small,
+      xLarge: props.xLarge
+    }))
 
-  computed: {
-    directives (): VNodeDirective[] {
-      if (this.readonly || !this.ripple) return []
+    const isHovering = computed(() => props.hover && hoverIndex.value >= 0)
 
-      return [{
-        name: 'ripple',
-        value: { circle: true }
-      } as VNodeDirective]
-    },
-    iconProps (): object {
-      const {
-        dark,
-        medium,
-        large,
-        light,
-        small,
-        size,
-        xLarge
-      } = this.$props
-
-      return {
-        dark,
-        medium,
-        large,
-        light,
-        size,
-        small,
-        xLarge
-      }
-    },
-    isHovering (): boolean {
-      return this.hover && this.hoverIndex >= 0
-    }
-  },
-
-  watch: {
-    internalValue (val) {
-      val !== this.value && this.$emit('input', val)
-    },
-    value (val) {
-      this.internalValue = val
-    }
-  },
-
-  methods: {
-    createClickFn (i: number): Function {
-      return (e: MouseEvent) => {
-        if (this.readonly) return
-
-        const newValue = this.genHoverIndex(e, i)
-        if (this.clearable && this.internalValue === newValue) {
-          this.internalValue = 0
-        } else {
-          this.internalValue = newValue
-        }
-      }
-    },
-    createProps (i: number): ItemSlotProps {
-      const props: ItemSlotProps = {
-        index: i,
-        value: this.internalValue,
-        click: this.createClickFn(i),
-        isFilled: Math.floor(this.internalValue) > i,
-        isHovered: Math.floor(this.hoverIndex) > i
-      }
-
-      if (this.halfIncrements) {
-        props.isHalfHovered = !props.isHovered && (this.hoverIndex - i) % 1 > 0
-        props.isHalfFilled = !props.isFilled && (this.internalValue - i) % 1 > 0
-      }
-
-      return props
-    },
-    genHoverIndex (e: MouseEvent, i: number) {
-      return i + (this.isHalfEvent(e) ? 0.5 : 1)
-    },
-    getIconName (props: ItemSlotProps): string {
-      const isFull = this.isHovering ? props.isHovered : props.isFilled
-      const isHalf = this.isHovering ? props.isHalfHovered : props.isHalfFilled
-
-      return isFull ? this.fullIcon : isHalf ? this.halfIcon : this.emptyIcon
-    },
-    getColor (props: ItemSlotProps): string {
-      if (this.isHovering) {
-        if (props.isHovered || props.isHalfHovered) return this.color
-      } else {
-        if (props.isFilled || props.isHalfFilled) return this.color
-      }
-
-      return this.backgroundColor
-    },
-    isHalfEvent (e: MouseEvent): boolean {
-      if (this.halfIncrements) {
-        const rect = e.target && (e.target as HTMLElement).getBoundingClientRect()
+    function isHalfEvent (e: MouseEvent): boolean {
+      if (props.halfIncrements) {
+        const target = e.target as HTMLElement | null
+        const rect = target && target.getBoundingClientRect()
         if (rect && (e.pageX - rect.left) < rect.width / 2) return true
       }
 
       return false
-    },
-    onMouseEnter (e: MouseEvent, i: number): void {
-      this.runDelay('open', () => {
-        this.hoverIndex = this.genHoverIndex(e, i)
-      })
-    },
-    onMouseLeave (): void {
-      this.runDelay('close', () => (this.hoverIndex = -1))
-    },
-    genItem (i: number): VNode | VNodeChildren | string {
-      const props = this.createProps(i)
+    }
 
-      if (this.$scopedSlots.item) return this.$scopedSlots.item(props)
+    function genHoverIndex (e: MouseEvent, i: number) {
+      return i + (isHalfEvent(e) ? 0.5 : 1)
+    }
 
-      const listeners: Record<string, Function> = {
-        click: props.click
+    function createClickFn (i: number): Function {
+      return (e: MouseEvent) => {
+        if (props.readonly) return
+
+        const newValue = genHoverIndex(e, i)
+        if (props.clearable && internalValue.value === newValue) {
+          internalValue.value = 0
+        } else {
+          internalValue.value = newValue
+        }
+      }
+    }
+
+    function createProps (i: number): ItemSlotProps {
+      const itemProps: ItemSlotProps = {
+        index: i,
+        value: internalValue.value,
+        click: createClickFn(i),
+        isFilled: Math.floor(internalValue.value) > i,
+        isHovered: Math.floor(hoverIndex.value) > i
       }
 
-      if (this.hover) {
-        listeners.mouseenter = (e: MouseEvent) => this.onMouseEnter(e, i)
-        listeners.mouseleave = this.onMouseLeave
+      if (props.halfIncrements) {
+        itemProps.isHalfHovered = !itemProps.isHovered && (hoverIndex.value - i) % 1 > 0
+        itemProps.isHalfFilled = !itemProps.isFilled && (internalValue.value - i) % 1 > 0
+      }
 
-        if (this.halfIncrements) {
-          listeners.mousemove = (e: MouseEvent) => this.onMouseEnter(e, i)
+      return itemProps
+    }
+
+    function getIconName (itemProps: ItemSlotProps): string {
+      const isFull = isHovering.value ? itemProps.isHovered : itemProps.isFilled
+      const isHalf = isHovering.value ? itemProps.isHalfHovered : itemProps.isHalfFilled
+
+      return isFull ? props.fullIcon : isHalf ? props.halfIcon : props.emptyIcon
+    }
+
+    function getColor (itemProps: ItemSlotProps): string {
+      if (isHovering.value) {
+        if (itemProps.isHovered || itemProps.isHalfHovered) return props.color
+      } else {
+        if (itemProps.isFilled || itemProps.isHalfFilled) return props.color
+      }
+
+      return props.backgroundColor
+    }
+
+    function onMouseEnter (e: MouseEvent, i: number): void {
+      runDelay('open', () => {
+        hoverIndex.value = genHoverIndex(e, i)
+      })
+    }
+
+    function onMouseLeave (): void {
+      runDelay('close', () => (hoverIndex.value = -1))
+    }
+
+    function genItem (i: number): VNode | VNodeChildren | string {
+      const itemProps = createProps(i)
+
+      if (slots.item) return slots.item(itemProps)
+
+      const listeners: Record<string, Function> = {
+        click: itemProps.click
+      }
+
+      if (props.hover) {
+        listeners.mouseenter = (e: MouseEvent) => onMouseEnter(e, i)
+        listeners.mouseleave = onMouseLeave
+
+        if (props.halfIncrements) {
+          listeners.mousemove = (e: MouseEvent) => onMouseEnter(e, i)
         }
       }
 
-      return this.$createElement(VIcon, this.setTextColor(this.getColor(props), {
-        directives: this.directives,
-        props: this.iconProps,
+      const data = setTextColor(getColor(itemProps), {
+        props: iconProps.value,
         on: listeners
-      }), [this.getIconName(props)])
-    }
-  },
+      }) as any
 
-  render (h): VNode {
-    const children = createRange(Number(this.length)).map(i => this.genItem(i))
+      let iconNode = h(VIcon as any, data, { default: () => [getIconName(itemProps)] })
 
-    return h('div', {
-      staticClass: 'v-rating',
-      class: {
-        ...this.themeClasses,
-        'v-rating--readonly': this.readonly,
-        'v-rating--dense': this.dense
+      if (!props.readonly && props.ripple) {
+        iconNode = withDirectives(iconNode, [[Ripple, { circle: true }]])
       }
-    }, children)
+
+      return iconNode
+    }
+
+    onBeforeUnmount(() => {
+      clearDelay()
+    })
+
+    return () => {
+      const children = createRange(Number(props.length)).map(i => genItem(i))
+
+      return h('div', {
+        staticClass: 'v-rating',
+        class: {
+          ...themeClasses.value,
+          'v-rating--readonly': props.readonly,
+          'v-rating--dense': props.dense
+        }
+      }, children as any)
+    }
   }
 })

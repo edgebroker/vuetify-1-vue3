@@ -23,7 +23,7 @@ import {
 } from '../../util/helpers'
 
 // Types
-import { defineComponent } from 'vue'
+import { defineComponent, computed, getCurrentInstance, h } from 'vue'
 
 /* @vue/component */
 export default defineComponent({
@@ -66,76 +66,62 @@ export default defineComponent({
     ...themeProps
   },
 
-  setup (props) {
+  setup (props, { slots, emit }) {
     const { setTextColor } = useColorable(props)
     const { themeClasses } = useThemeable(props)
+    const vm = getCurrentInstance()
+    const parentProxy = vm?.proxy
 
-    return {
-      setTextColor,
-      themeClasses
-    }
-  },
+    const parsedItems = computed(() => props.selectedItems.map(item => getValue(item)))
 
-  computed: {
-    parsedItems () {
-      return this.selectedItems.map(item => this.getValue(item))
-    },
-    tileActiveClass () {
-      return Object.keys(this.setTextColor(this.color).class || {}).join(' ')
-    },
-    staticNoDataTile () {
+    const tileActiveClass = computed(() => {
+      const colorData = setTextColor(props.color, {})
+      const classes = colorData.class || {}
+      return Object.keys(classes).join(' ')
+    })
+
+    const staticNoDataTile = computed(() => {
       const tile = {
         on: {
-          mousedown: e => e.preventDefault() // Prevent onBlur from being called
+          mousedown: e => e.preventDefault()
         }
       }
 
-      return this.$createElement(VListTile, tile, [
-        this.genTileContent(this.noDataText)
-      ])
-    }
-  },
+      return h(VListTile, tile, [genTileContent(props.noDataText)])
+    })
 
-  methods: {
-    genAction (item, inputValue) {
-      const data = {
+    function genAction (item, inputValue) {
+      return h(VListTileAction, {
         on: {
           click: e => {
             e.stopPropagation()
-            this.$emit('select', item)
+            emit('select', item)
           }
         }
-      }
-
-      return this.$createElement(VListTileAction, data, [
-        this.$createElement(VCheckbox, {
+      }, [
+        h(VCheckbox, {
           props: {
-            color: this.color,
+            color: props.color,
             inputValue
           }
         })
       ])
-    },
-    genDivider (props) {
-      return this.$createElement(VDivider, { props })
-    },
-    genFilteredText (text) {
-      text = (text || '').toString()
+    }
 
-      if (!this.searchInput || this.noFilter) return escapeHTML(text)
+    function genDivider (dividerProps) {
+      return h(VDivider, { props: dividerProps })
+    }
 
-      const { start, middle, end } = this.getMaskedCharacters(text)
+    function genHeader (headerProps) {
+      return h(VSubheader, { props: headerProps }, headerProps.header)
+    }
 
-      return `${escapeHTML(start)}${this.genHighlight(middle)}${escapeHTML(end)}`
-    },
-    genHeader (props) {
-      return this.$createElement(VSubheader, { props }, props.header)
-    },
-    genHighlight (text) {
+    function genHighlight (text) {
       return `<span class="v-list__tile__mask">${escapeHTML(text)}</span>`
-    },
-    getMaskedCharacters (text) {
-      const searchInput = (this.searchInput || '').toString().toLocaleLowerCase()
+    }
+
+    function getMaskedCharacters (text) {
+      const searchInput = (props.searchInput ?? '').toString().toLocaleLowerCase()
       const index = text.toLocaleLowerCase().indexOf(searchInput)
 
       if (index < 0) return { start: '', middle: text, end: '' }
@@ -144,113 +130,139 @@ export default defineComponent({
       const middle = text.slice(index, index + searchInput.length)
       const end = text.slice(index + searchInput.length)
       return { start, middle, end }
-    },
-    genTile (
+    }
+
+    function genFilteredText (text) {
+      const value = (text || '').toString()
+
+      if (!props.searchInput || props.noFilter) return escapeHTML(value)
+
+      const { start, middle, end } = getMaskedCharacters(value)
+
+      return `${escapeHTML(start)}${genHighlight(middle)}${escapeHTML(end)}`
+    }
+
+    function getAvatar (item) {
+      return Boolean(getPropertyFromItem(item, props.itemAvatar, false))
+    }
+
+    function getDisabled (item) {
+      return Boolean(getPropertyFromItem(item, props.itemDisabled, false))
+    }
+
+    function getText (item) {
+      return String(getPropertyFromItem(item, props.itemText, item))
+    }
+
+    function getValue (item) {
+      return getPropertyFromItem(item, props.itemValue, getText(item))
+    }
+
+    function hasItem (item) {
+      return parsedItems.value.indexOf(getValue(item)) > -1
+    }
+
+    function needsTile (slotNodes) {
+      if (!slotNodes || slotNodes.length !== 1) return true
+      const vnode = slotNodes[0]
+      const type = vnode && vnode.type
+      if (!type) return true
+      const name = typeof type === 'string'
+        ? type
+        : (type.options && type.options.name) || type.name
+      return name !== 'v-list-tile'
+    }
+
+    function genTileContent (item) {
+      const innerHTML = genFilteredText(item != null ? getText(item) : '')
+
+      return h(VListTileContent, [
+        h(VListTileTitle, {
+          domProps: { innerHTML }
+        })
+      ])
+    }
+
+    function genTile (
       item,
       disabled = null,
       avatar = false,
-      value = this.hasItem(item)
+      value = hasItem(item)
     ) {
       if (item === Object(item)) {
-        avatar = this.getAvatar(item)
+        avatar = getAvatar(item)
         disabled = disabled !== null
           ? disabled
-          : this.getDisabled(item)
+          : getDisabled(item)
       }
 
       const tile = {
         on: {
           mousedown: e => {
-            // Prevent onBlur from being called
             e.preventDefault()
           },
-          click: () => disabled || this.$emit('select', item)
+          click: () => disabled || emit('select', item)
         },
         props: {
-          activeClass: this.tileActiveClass,
+          activeClass: tileActiveClass.value,
           avatar,
           disabled,
           ripple: true,
           value,
-          color: this.color
+          color: props.color
         }
       }
 
-      if (!this.$scopedSlots.item) {
-        return this.$createElement(VListTile, tile, [
-          this.action && !this.hideSelected && this.items.length > 0
-            ? this.genAction(item, value)
+      if (!slots.item) {
+        return h(VListTile, tile, [
+          props.action && !props.hideSelected && props.items.length > 0
+            ? genAction(item, value)
             : null,
-          this.genTileContent(item)
+          genTileContent(item)
         ])
       }
 
-      const parent = this
-      const scopedSlot = this.$scopedSlots.item({ parent, item, tile })
+      const scopedSlot = slots.item({ parent: parentProxy, item, tile })
+      const slotNodes = Array.isArray(scopedSlot) ? scopedSlot : [scopedSlot]
 
-      return this.needsTile(scopedSlot)
-        ? this.$createElement(VListTile, tile, scopedSlot)
-        : scopedSlot
-    },
-    genTileContent (item) {
-      const innerHTML = this.genFilteredText(this.getText(item))
-
-      return this.$createElement(VListTileContent,
-        [this.$createElement(VListTileTitle, {
-          domProps: { innerHTML }
-        })]
-      )
-    },
-    hasItem (item) {
-      return this.parsedItems.indexOf(this.getValue(item)) > -1
-    },
-    needsTile (slot) {
-      return slot.length !== 1 ||
-        slot[0].componentOptions == null ||
-        slot[0].componentOptions.Ctor.options.name !== 'v-list-tile'
-    },
-    getAvatar (item) {
-      return Boolean(getPropertyFromItem(item, this.itemAvatar, false))
-    },
-    getDisabled (item) {
-      return Boolean(getPropertyFromItem(item, this.itemDisabled, false))
-    },
-    getText (item) {
-      return String(getPropertyFromItem(item, this.itemText, item))
-    },
-    getValue (item) {
-      return getPropertyFromItem(item, this.itemValue, this.getText(item))
-    }
-  },
-
-  render () {
-    const children = []
-    for (const item of this.items) {
-      if (this.hideSelected &&
-        this.hasItem(item)
-      ) continue
-
-      if (item == null) children.push(this.genTile(item))
-      else if (item.header) children.push(this.genHeader(item))
-      else if (item.divider) children.push(this.genDivider(item))
-      else children.push(this.genTile(item))
+      return needsTile(slotNodes)
+        ? h(VListTile, tile, slotNodes)
+        : slotNodes[0]
     }
 
-    children.length || children.push(this.$slots['no-data'] || this.staticNoDataTile)
+    return () => {
+      const children = []
+      for (const item of props.items) {
+        if (props.hideSelected && hasItem(item)) continue
 
-    this.$slots['prepend-item'] && children.unshift(this.$slots['prepend-item'])
+        if (item == null) children.push(genTile(item))
+        else if (item && item.header) children.push(genHeader(item))
+        else if (item && item.divider) children.push(genDivider(item))
+        else children.push(genTile(item))
+      }
 
-    this.$slots['append-item'] && children.push(this.$slots['append-item'])
+      if (!children.length) {
+        const noDataSlot = slots['no-data']?.()
+        if (noDataSlot && noDataSlot.length) children.push(...noDataSlot)
+        else children.push(staticNoDataTile.value)
+      }
 
-    return this.$createElement('div', {
-      staticClass: 'v-select-list v-card',
-      'class': this.themeClasses
-    }, [
-      this.$createElement(VList, {
-        props: {
-          dense: this.dense
-        }
-      }, children)
-    ])
+      const prependSlot = slots['prepend-item']?.()
+      if (prependSlot && prependSlot.length) children.unshift(...prependSlot)
+
+      const appendSlot = slots['append-item']?.()
+      if (appendSlot && appendSlot.length) children.push(...appendSlot)
+
+      return h('div', {
+        staticClass: 'v-select-list v-card',
+        class: themeClasses.value
+      }, [
+        h(VList, {
+          props: {
+            dense: props.dense
+          }
+        }, children)
+      ])
+    }
   }
 })
