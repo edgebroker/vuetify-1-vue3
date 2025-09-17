@@ -22,7 +22,7 @@ import {
 import { deprecate } from '../../util/console'
 
 // Types
-import { computed, defineComponent, getCurrentInstance, ref } from 'vue'
+import { computed, defineComponent, getCurrentInstance, nextTick, onMounted, ref, watch } from 'vue'
 
 const dirtyTypes = ['color', 'file', 'time', 'date', 'datetime-local', 'week', 'month']
 
@@ -155,6 +155,53 @@ export default defineComponent({
       'v-text-field--placeholder': props.placeholder
     }))
 
+    onMounted(() => {
+      if (props.autofocus) {
+        proxy?.onFocus?.()
+      }
+    })
+
+    watch(
+      () => proxy?.isFocused,
+      val => {
+        if (val == null) return
+
+        if (proxy) proxy.hasColor = val
+
+        const lazyValue = maskable.lazyValue
+        if (!lazyValue) return
+
+        if (val) {
+          initialValue.value = lazyValue.value
+        } else if (initialValue.value !== lazyValue.value) {
+          emit('change', lazyValue.value)
+        }
+      }
+    )
+
+    watch(
+      () => props.value,
+      val => {
+        const lazyValue = maskable.lazyValue
+        if (!lazyValue) return
+
+        if (props.mask && !internalChange.value) {
+          const masked = maskable.maskText(maskable.unmaskText(val))
+          lazyValue.value = maskable.unmaskText(masked)
+
+          if (String(val) !== lazyValue.value) {
+            nextTick(() => {
+              const inputEl = maskable.input?.value || proxy?.$refs?.input
+              if (inputEl) inputEl.value = masked
+              emit('input', lazyValue.value)
+            })
+          }
+        } else {
+          lazyValue.value = val
+        }
+      }
+    )
+
     return {
       ...maskable,
       ...loadable,
@@ -179,35 +226,6 @@ export default defineComponent({
       prefixLabel,
       textarea
     }
-  },
-
-  watch: {
-    isFocused (val) {
-      // Sets validationState from validatable
-      this.hasColor = val
-
-      if (val) {
-        this.initialValue = this.lazyValue
-      } else if (this.initialValue !== this.lazyValue) {
-        this.$emit('change', this.lazyValue)
-      }
-    },
-    value (val) {
-      if (this.mask && !this.internalChange) {
-        const masked = this.maskText(this.unmaskText(val))
-        this.lazyValue = this.unmaskText(masked)
-
-        // Emit when the externally set value was modified internally
-        String(val) !== this.lazyValue && this.$nextTick(() => {
-          this.$refs.input.value = masked
-          this.$emit('input', this.lazyValue)
-        })
-      } else this.lazyValue = val
-    }
-  },
-
-  mounted () {
-    this.autofocus && this.onFocus()
   },
 
   methods: {
