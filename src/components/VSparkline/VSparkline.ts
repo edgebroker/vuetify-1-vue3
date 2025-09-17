@@ -34,7 +34,7 @@ export interface BarText {
   lineWidth: number
 }
 
-export default defineComponent({
+const VSparkline = defineComponent({
   name: 'v-sparkline',
 
   props: {
@@ -112,6 +112,13 @@ export default defineComponent({
     const { setTextColor } = useColorable(props)
 
     const uid = getCurrentInstance()?.uid ?? 0
+    const gradientId = computed(() => String(uid))
+    const gradientVector = computed(() => ({
+      x1: Number(props.gradientDirection === 'left'),
+      y1: Number(props.gradientDirection === 'top'),
+      x2: Number(props.gradientDirection === 'right'),
+      y2: Number(props.gradientDirection === 'bottom')
+    }))
     const lastLength = ref(0)
     const path = ref<SVGPathElement | null>(null)
 
@@ -202,7 +209,6 @@ export default defineComponent({
     }, { immediate: true, deep: true })
 
     function genGradient () {
-      const gradientDirection = props.gradientDirection
       const gradient = props.gradient.slice()
 
       if (!gradient.length) gradient.push('')
@@ -217,11 +223,8 @@ export default defineComponent({
 
       return h('defs', [
         h('linearGradient', {
-          id: String(uid),
-          x1: Number(gradientDirection === 'left'),
-          y1: Number(gradientDirection === 'top'),
-          x2: Number(gradientDirection === 'right'),
-          y2: Number(gradientDirection === 'bottom')
+          id: gradientId.value,
+          ...gradientVector.value
         }, stops)
       ])
     }
@@ -247,10 +250,10 @@ export default defineComponent({
       const radius = props.smooth === true ? 8 : Number(props.smooth)
 
       return h('path', {
-        id: String(uid),
+        id: gradientId.value,
         d: genPath(points.value.slice(), radius, props.fill, Number(props.height)),
-        fill: props.fill ? `url(#${uid})` : 'none',
-        stroke: props.fill ? 'none' : `url(#${uid})`,
+        fill: props.fill ? `url(#${gradientId.value})` : 'none',
+        stroke: props.fill ? 'none' : `url(#${gradientId.value})`,
         ref: path
       })
     }
@@ -339,7 +342,7 @@ export default defineComponent({
         h('g', {
           transform: `scale(1,-1) translate(0,-${barBoundary.maxY})`,
           'clip-path': `url(#sparkline-bar-${uid}-clip)`,
-          fill: `url(#${uid})`
+          fill: `url(#${gradientId.value})`
         }, [
           h('rect', {
             x: 0,
@@ -377,3 +380,6 @@ export default defineComponent({
     }
   }
 })
+
+export { VSparkline }
+export default VSparkline

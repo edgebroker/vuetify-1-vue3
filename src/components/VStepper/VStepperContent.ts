@@ -19,7 +19,7 @@ import {
   isRef
 } from 'vue'
 
-export default defineComponent({
+const VStepperContent = defineComponent({
   name: 'v-stepper-content',
 
   props: {
@@ -158,3 +158,6 @@ export default defineComponent({
     }
   }
 })
+
+export { VStepperContent }
+export default VStepperContent
