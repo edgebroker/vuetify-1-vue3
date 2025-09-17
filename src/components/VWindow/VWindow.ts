@@ -11,6 +11,22 @@ import Touch from '../../directives/touch'
 import { defineComponent, h, ref, computed, watch, provide, nextTick, getCurrentInstance, onMounted } from 'vue'
 import { VNodeDirective } from 'vue/types/vnode'
 
+export interface VWindowProvide {
+  activeClass?: string
+  computedTransition: string
+  internalHeight: string | undefined
+  internalIndex: number
+  internalReverse: boolean
+  isActive: boolean
+  isBooted: boolean
+  isReverse: boolean
+  next: () => void
+  prev: () => void
+  register: (vm: any) => void
+  unregister: (vm: any) => void
+  updateReverse: (val: number, oldVal: number) => void
+}
+
 function windowGetValue (this: any, item: any, i: number) {
   const value = item && (item.value ?? item.id)
   return value == null || value === '' ? i : value
@@ -156,7 +172,56 @@ const VWindow = defineComponent({
       })
     }
 
-    provide('windowGroup', proxy)
+    const windowGroup = {} as VWindowProvide
+
+    Object.defineProperties(windowGroup, {
+      activeClass: {
+        get: () => (proxy && 'activeClass' in proxy ? proxy.activeClass : (props as any).activeClass)
+      },
+      internalHeight: {
+        get: () => internalHeight.value,
+        set: (val: string | undefined) => { internalHeight.value = val }
+      },
+      isActive: {
+        get: () => isActive.value,
+        set: (val: boolean) => { isActive.value = val }
+      },
+      isBooted: {
+        get: () => isBooted.value,
+        set: (val: boolean) => { isBooted.value = val }
+      },
+      isReverse: {
+        get: () => isReverse.value,
+        set: (val: boolean) => { isReverse.value = val }
+      },
+      internalReverse: {
+        get: () => internalReverse.value
+      },
+      internalIndex: {
+        get: () => internalIndex.value
+      },
+      computedTransition: {
+        get: () => computedTransition.value
+      }
+    })
+
+    function register (item: any) {
+      proxy?.register?.(item)
+    }
+
+    function unregister (item: any) {
+      proxy?.unregister?.(item)
+    }
+
+    Object.assign(windowGroup, {
+      register,
+      unregister,
+      next,
+      prev,
+      updateReverse: (val: number, oldVal: number) => updateReverse(val, oldVal)
+    })
+
+    provide('windowGroup', windowGroup)
 
     function genContainer () {
       return h('div', {
