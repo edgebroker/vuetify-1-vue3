@@ -8,13 +8,14 @@ import useDataTableFoot from './composables/useDataTableFoot'
 import useDataTableHead from './composables/useDataTableHead'
 import useDataTableProgress from './composables/useDataTableProgress'
 
+import VTableOverflow from './VTableOverflow'
+
 // Utils
-import { createSimpleFunctional, getObjectValueByPath } from '../../util/helpers'
+import { getObjectValueByPath } from '../../util/helpers'
 
 // Types
 import { computed, defineComponent, getCurrentInstance, h } from 'vue'
 
-const VTableOverflow = createSimpleFunctional('v-table__overflow')
 
 function hasTag (elements, tag) {
   if (!Array.isArray(elements)) return false
