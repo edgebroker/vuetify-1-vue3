@@ -25,7 +25,7 @@ import useColorable from '../../composables/useColorable'
 import useLoadable, { loadableProps } from '../../composables/useLoadable'
 
 // Types
-import { defineComponent, ref, getCurrentInstance, computed } from 'vue'
+import { defineComponent, ref, getCurrentInstance, computed, h, watch, onMounted, withDirectives, vShow } from 'vue'
 
 /* @vue/component */
 export default defineComponent({
@@ -86,456 +86,580 @@ export default defineComponent({
   },
 
   setup (props, context) {
+    const { attrs, emit, slots, expose } = context
     const { setBackgroundColor, setTextColor } = useColorable(props)
     const { genProgress } = useLoadable(props, context)
 
+    const instance = getCurrentInstance()
+    const proxy = instance?.proxy
+
     const app = ref(null)
+    const input = ref(null)
+    const track = ref(null)
     const isActive = ref(false)
     const keyPressed = ref(0)
-    const lazyValue = ref(typeof props.value !== 'undefined' ? props.value : Number(props.min))
+    const lazyValue = ref(typeof props.value !== 'undefined' ? Number(props.value) : Number(props.min))
     const oldValue = ref(null)
 
-    return {
-      setBackgroundColor,
-      setTextColor,
-      genProgress,
-      app,
-      isActive,
-      keyPressed,
-      lazyValue,
-      oldValue
-    }
-  },
+    const minValue = computed(() => Number(props.min))
+    const maxValue = computed(() => Number(props.max))
+    const stepNumeric = computed(() => {
+      const step = Number(props.step)
+      return step > 0 ? parseFloat(props.step) : 0
+    })
+    const rtl = computed(() => Boolean(proxy?.$vuetify?.rtl))
 
-  computed: {
-    classes () {
-      return {
-        'v-input--slider': true,
-        'v-input--slider--ticks': this.showTicks,
-        'v-input--slider--inverse-label': this.inverseLabel,
-        'v-input--slider--ticks-labels': this.tickLabels.length > 0,
-        'v-input--slider--thumb-label': this.thumbLabel ||
-          this.$scopedSlots.thumbLabel
-      }
-    },
-    showTicks () {
-      return this.tickLabels.length > 0 ||
-        (!this.disabled && this.stepNumeric && !!this.ticks)
-    },
-    showThumbLabel () {
-      return !this.disabled && (
-        !!this.thumbLabel ||
-        this.thumbLabel === '' ||
-        this.$scopedSlots['thumb-label']
-      )
-    },
-    computedColor () {
-      if (this.disabled) return null
-      return this.validationState || this.color || 'primary'
-    },
-    computedTrackColor () {
-      return this.disabled ? null : (this.trackColor || null)
-    },
-    computedThumbColor () {
-      if (this.disabled || !this.isDirty) return null
-      return this.validationState || this.thumbColor || this.color || 'primary'
-    },
-    internalValue: {
+    function roundValue (value) {
+      if (!stepNumeric.value) return value
+
+      const trimmedStep = props.step.toString().trim()
+      const decimals = trimmedStep.indexOf('.') > -1
+        ? trimmedStep.length - trimmedStep.indexOf('.') - 1
+        : 0
+      const offset = minValue.value % stepNumeric.value
+
+      const newValue = Math.round((value - offset) / stepNumeric.value) * stepNumeric.value + offset
+      const clamped = Math.max(Math.min(newValue, maxValue.value), minValue.value)
+
+      return parseFloat(clamped.toFixed(decimals))
+    }
+
+    const internalValue = computed({
       get () {
-        return this.lazyValue
+        return Number(lazyValue.value)
       },
       set (val) {
-        const { min, max } = this
+        const numericVal = typeof val === 'number' ? val : parseFloat(val)
+        if (Number.isNaN(numericVal)) return
 
-        // Round value to ensure the
-        // entire slider range can
-        // be selected with step
-        const value = this.roundValue(Math.min(Math.max(val, min), max))
+        const clamped = Math.min(Math.max(numericVal, minValue.value), maxValue.value)
+        const value = roundValue(clamped)
 
-        if (value === this.lazyValue) return
+        if (value === lazyValue.value) return
 
-        this.lazyValue = value
-
-        this.$emit('input', value)
-        this.validate()
+        lazyValue.value = value
+        emit('input', value)
+        proxy?.validate && proxy.validate()
       }
-    },
-    stepNumeric () {
-      return this.step > 0 ? parseFloat(this.step) : 0
-    },
-    trackFillStyles () {
-      const left = this.$vuetify.rtl ? 'auto' : 0
-      const right = this.$vuetify.rtl ? 0 : 'auto'
-      let width = `${this.inputWidth}%`
+    })
 
-      if (this.disabled) width = `calc(${this.inputWidth}% - 8px)`
+    const inputWidth = computed(() => {
+      const length = maxValue.value - minValue.value
+      if (!length) return 0
+
+      const numericValue = Number(internalValue.value)
+      if (Number.isNaN(numericValue)) return 0
+
+      return (roundValue(numericValue) - minValue.value) / length * 100
+    })
+
+    const trackTransition = computed(() => keyPressed.value >= 2 ? 'none' : '')
+    const trackPadding = computed(() => (
+      isActive.value ||
+      inputWidth.value > 0 ||
+      props.disabled
+    ) ? 0 : 7)
+
+    const showTicks = computed(() => props.tickLabels.length > 0 || (!props.disabled && stepNumeric.value && !!props.ticks))
+    const showThumbLabel = computed(() => !props.disabled && (
+      !!props.thumbLabel ||
+      props.thumbLabel === '' ||
+      Boolean(slots['thumb-label'])
+    ))
+
+    const computedColor = computed(() => {
+      if (props.disabled) return null
+      return proxy?.validationState || props.color || 'primary'
+    })
+
+    const computedTrackColor = computed(() => props.disabled ? null : (props.trackColor || null))
+
+    const isDirty = computed(() => Number(internalValue.value) > minValue.value || props.alwaysDirty)
+
+    const computedThumbColor = computed(() => {
+      if (props.disabled || !isDirty.value) return null
+      return proxy?.validationState || props.thumbColor || props.color || 'primary'
+    })
+
+    const trackFillStyles = computed(() => {
+      const left = rtl.value ? 'auto' : 0
+      const right = rtl.value ? 0 : 'auto'
+      let width = `${inputWidth.value}%`
+
+      if (props.disabled) width = `calc(${inputWidth.value}% - 8px)`
 
       return {
-        transition: this.trackTransition,
+        transition: trackTransition.value,
         left,
         right,
         width
       }
-    },
-    trackPadding () {
-      return (
-        this.isActive ||
-        this.inputWidth > 0 ||
-        this.disabled
-      ) ? 0 : 7
-    },
-    trackStyles () {
-      const trackPadding = this.disabled ? `calc(${this.inputWidth}% + 8px)` : `${this.trackPadding}px`
-      const left = this.$vuetify.rtl ? 'auto' : trackPadding
-      const right = this.$vuetify.rtl ? trackPadding : 'auto'
-      const width = this.disabled
-        ? `calc(${100 - this.inputWidth}% - 8px)`
+    })
+
+    const trackStyles = computed(() => {
+      const padding = props.disabled ? `calc(${inputWidth.value}% + 8px)` : `${trackPadding.value}px`
+      const left = rtl.value ? 'auto' : padding
+      const right = rtl.value ? padding : 'auto'
+      const width = props.disabled
+        ? `calc(${100 - inputWidth.value}% - 8px)`
         : '100%'
 
       return {
-        transition: this.trackTransition,
+        transition: trackTransition.value,
         left,
         right,
         width
       }
-    },
-    tickStyles () {
-      const size = Number(this.tickSize)
+    })
 
-      return {
-        'border-width': `${size}px`,
-        'border-radius': size > 1 ? '50%' : null,
-        transform: size > 1 ? `translateX(-${size}px) translateY(-${size - 1}px)` : null
+    const tickStyles = computed(() => {
+      const size = Number(props.tickSize)
+      const styles = {
+        'border-width': `${size}px`
       }
-    },
-    trackTransition () {
-      return this.keyPressed >= 2 ? 'none' : ''
-    },
-    numTicks () {
-      return Math.ceil((this.max - this.min) / this.stepNumeric)
-    },
-    inputWidth () {
-      return (this.roundValue(this.internalValue) - this.min) / (this.max - this.min) * 100
-    },
-    isDirty () {
-      return this.internalValue > this.min ||
-        this.alwaysDirty
-    }
-  },
 
-  watch: {
-    min (val) {
-      val > this.internalValue && this.$emit('input', parseFloat(val))
-    },
-    max (val) {
-      val < this.internalValue && this.$emit('input', parseFloat(val))
-    },
-    value (val) {
-      this.internalValue = val
-    }
-  },
+      styles['border-radius'] = size > 1 ? '50%' : null
+      styles.transform = size > 1 ? `translateX(-${size}px) translateY(-${size - 1}px)` : null
 
-  mounted () {
-    // Without a v-app, iOS does not work with body selectors
-    this.app = document.querySelector('[data-app]') ||
-      consoleWarn('Missing v-app or a non-body wrapping element with the [data-app] attribute', this)
-  },
+      return styles
+    })
 
-  methods: {
-    genDefaultSlot () {
-      const children = [this.genLabel()]
-      const slider = this.genSlider()
-      this.inverseLabel
-        ? children.unshift(slider)
-        : children.push(slider)
+    const numTicks = computed(() => {
+      const step = stepNumeric.value
+      if (!step) return 0
+      return Math.ceil((maxValue.value - minValue.value) / step)
+    })
 
-      children.push(this.genProgress())
+    const classes = computed(() => ({
+      'v-input--slider': true,
+      'v-input--slider--ticks': showTicks.value,
+      'v-input--slider--inverse-label': props.inverseLabel,
+      'v-input--slider--ticks-labels': props.tickLabels.length > 0,
+      'v-input--slider--thumb-label': Boolean(props.thumbLabel) || Boolean(slots['thumb-label'])
+    }))
 
-      return children
-    },
-    genListeners () {
-      return {
-        blur: this.onBlur,
-        click: this.onSliderClick,
-        focus: this.onFocus,
-        keydown: this.onKeyDown,
-        keyup: this.onKeyUp
+    watch(() => props.min, val => {
+      const numeric = parseFloat(val)
+      if (Number.isNaN(numeric)) return
+      if (numeric > Number(internalValue.value)) emit('input', numeric)
+    })
+
+    watch(() => props.max, val => {
+      const numeric = parseFloat(val)
+      if (Number.isNaN(numeric)) return
+      if (numeric < Number(internalValue.value)) emit('input', numeric)
+    })
+
+    watch(() => props.value, val => {
+      if (deepEqual(val, lazyValue.value)) return
+      internalValue.value = val
+    })
+
+    onMounted(() => {
+      const application = document.querySelector('[data-app]')
+
+      if (application) {
+        app.value = application
+      } else {
+        consoleWarn('Missing v-app or a non-body wrapping element with the [data-app] attribute', proxy)
       }
-    },
-    genInput () {
-      return this.$createElement('input', {
-        attrs: {
-          'aria-label': this.label,
-          name: this.name,
-          role: 'slider',
-          tabindex: this.disabled ? -1 : this.$attrs.tabindex,
-          value: this.internalValue,
-          readonly: true,
-          'aria-readonly': String(this.readonly),
-          'aria-valuemin': this.min,
-          'aria-valuemax': this.max,
-          'aria-valuenow': this.internalValue,
-          ...this.$attrs
-        },
-        on: this.genListeners(),
-        ref: 'input'
-      })
-    },
-    genSlider () {
-      return this.$createElement('div', {
-        staticClass: 'v-slider',
-        'class': {
-          'v-slider--is-active': this.isActive
-        },
-        directives: [{
-          name: 'click-outside',
-          value: this.onBlur
-        }]
-      }, this.genChildren())
-    },
-    genChildren () {
-      return [
-        this.genInput(),
-        this.genTrackContainer(),
-        this.genSteps(),
-        this.genThumbContainer(
-          this.internalValue,
-          this.inputWidth,
-          this.isFocused || this.isActive,
-          this.onThumbMouseDown
-        )
-      ]
-    },
-    genSteps () {
-      if (!this.step || !this.showTicks) return null
+    })
 
-      const ticks = createRange(this.numTicks + 1).map(i => {
-        const children = []
+    const baseGenLabel = proxy && typeof proxy.genLabel === 'function'
+      ? proxy.genLabel.bind(proxy)
+      : undefined
 
-        if (this.tickLabels[i]) {
-          children.push(this.$createElement('span', this.tickLabels[i]))
-        }
+    function getLabel (value) {
+      const thumbLabelSlot = slots['thumb-label']
+      return thumbLabelSlot
+        ? thumbLabelSlot({ value })
+        : h('span', value)
+    }
 
-        return this.$createElement('span', {
-          key: i,
-          staticClass: 'v-slider__ticks',
-          class: {
-            'v-slider__ticks--always-show': this.ticks === 'always' ||
-              this.tickLabels.length > 0
-          },
-          style: {
-            ...this.tickStyles,
-            left: `${i * (100 / this.numTicks)}%`
-          }
-        }, children)
-      })
-
-      return this.$createElement('div', {
-        staticClass: 'v-slider__ticks-container'
-      }, ticks)
-    },
-    genThumb () {
-      return this.$createElement('div', this.setBackgroundColor(this.computedThumbColor, {
+    function genThumb () {
+      return h('div', setBackgroundColor(computedThumbColor.value, {
         staticClass: 'v-slider__thumb'
       }))
-    },
-    genThumbContainer (value, valueWidth, isActive, onDrag) {
-      const children = [this.genThumb()]
+    }
 
-      const thumbLabelContent = this.getLabel(value)
-      this.showThumbLabel && children.push(this.genThumbLabel(thumbLabelContent))
+    function genThumbLabel (content) {
+      const size = convertToUnit(props.thumbSize)
+      const show = Boolean(proxy?.isFocused) || isActive.value || props.thumbLabel === 'always'
 
-      return this.$createElement('div', this.setTextColor(this.computedThumbColor, {
+      const children = Array.isArray(content) ? content : [content]
+      const container = h('div', {
+        staticClass: 'v-slider__thumb-label__container'
+      }, [
+        h('div', setBackgroundColor(computedThumbColor.value, {
+          staticClass: 'v-slider__thumb-label',
+          style: {
+            height: size,
+            width: size
+          }
+        }), children)
+      ])
+
+      return h(VScaleTransition, {
+        origin: 'bottom center'
+      }, [withDirectives(container, [[vShow, show]])])
+    }
+
+    function genThumbContainer (value, valueWidth, active, onDrag) {
+      const children = [genThumb()]
+      const thumbLabelContent = getLabel(value)
+      if (showThumbLabel.value) {
+        const label = genThumbLabel(thumbLabelContent)
+        if (label) children.push(label)
+      }
+
+      return h('div', setTextColor(computedThumbColor.value, {
         staticClass: 'v-slider__thumb-container',
-        'class': {
-          'v-slider__thumb-container--is-active': isActive,
-          'v-slider__thumb-container--show-label': this.showThumbLabel
+        class: {
+          'v-slider__thumb-container--is-active': active,
+          'v-slider__thumb-container--show-label': showThumbLabel.value
         },
         style: {
-          transition: this.trackTransition,
-          left: `${this.$vuetify.rtl ? 100 - valueWidth : valueWidth}%`
+          transition: trackTransition.value,
+          left: `${rtl.value ? 100 - valueWidth : valueWidth}%`
         },
         on: {
           touchstart: onDrag,
           mousedown: onDrag
         }
       }), children)
-    },
-    genThumbLabel (content) {
-      const size = convertToUnit(this.thumbSize)
+    }
 
-      return this.$createElement(VScaleTransition, {
-        props: { origin: 'bottom center' }
-      }, [
-        this.$createElement('div', {
-          staticClass: 'v-slider__thumb-label__container',
-          directives: [
-            {
-              name: 'show',
-              value: this.isFocused || this.isActive || this.thumbLabel === 'always'
-            }
-          ]
-        }, [
-          this.$createElement('div', this.setBackgroundColor(this.computedThumbColor, {
-            staticClass: 'v-slider__thumb-label',
-            style: {
-              height: size,
-              width: size
-            }
-          }), [content])
-        ])
-      ])
-    },
-    genTrackContainer () {
+    function genTrackContainer () {
       const children = [
-        this.$createElement('div', this.setBackgroundColor(this.computedTrackColor, {
+        h('div', setBackgroundColor(computedTrackColor.value, {
           staticClass: 'v-slider__track',
-          style: this.trackStyles
+          style: trackStyles.value
         })),
-        this.$createElement('div', this.setBackgroundColor(this.computedColor, {
+        h('div', setBackgroundColor(computedColor.value, {
           staticClass: 'v-slider__track-fill',
-          style: this.trackFillStyles
+          style: trackFillStyles.value
         }))
       ]
 
-      return this.$createElement('div', {
+      return h('div', {
         staticClass: 'v-slider__track__container',
-        ref: 'track'
+        ref: track
       }, children)
-    },
-    getLabel (value) {
-      return this.$scopedSlots['thumb-label']
-        ? this.$scopedSlots['thumb-label']({ value })
-        : this.$createElement('span', value)
-    },
-    onBlur (e) {
-      if (this.keyPressed === 2) return
+    }
 
-      this.isActive = false
-      this.isFocused = false
-      this.$emit('blur', e)
-    },
-    onFocus (e) {
-      this.isFocused = true
-      this.$emit('focus', e)
-    },
-    onThumbMouseDown (e) {
-      this.oldValue = this.internalValue
-      this.keyPressed = 2
+    function genSteps () {
+      if (!props.step || !showTicks.value) return null
+
+      const ticks = createRange(numTicks.value + 1).map(i => {
+        const children = []
+
+        if (props.tickLabels[i]) {
+          children.push(h('span', props.tickLabels[i]))
+        }
+
+        return h('span', {
+          key: i,
+          staticClass: 'v-slider__ticks',
+          class: {
+            'v-slider__ticks--always-show': props.ticks === 'always' || props.tickLabels.length > 0
+          },
+          style: {
+            ...tickStyles.value,
+            left: `${i * (100 / numTicks.value)}%`
+          }
+        }, children)
+      })
+
+      return h('div', {
+        staticClass: 'v-slider__ticks-container'
+      }, ticks)
+    }
+
+    function genInput () {
+      return h('input', {
+        attrs: {
+          'aria-label': props.label,
+          name: props.name,
+          role: 'slider',
+          tabindex: props.disabled ? -1 : attrs.tabindex,
+          value: internalValue.value,
+          readonly: true,
+          'aria-readonly': String(props.readonly),
+          'aria-valuemin': props.min,
+          'aria-valuemax': props.max,
+          'aria-valuenow': internalValue.value,
+          ...attrs
+        },
+        on: {
+          blur: onBlur,
+          click: onSliderClick,
+          focus: onFocus,
+          keydown: onKeyDown,
+          keyup: onKeyUp
+        },
+        ref: input
+      })
+    }
+
+    function genChildren () {
+      return [
+        genInput(),
+        genTrackContainer(),
+        genSteps(),
+        genThumbContainer(
+          internalValue.value,
+          inputWidth.value,
+          Boolean(proxy?.isFocused) || isActive.value,
+          onThumbMouseDown
+        )
+      ]
+    }
+
+    function genSlider () {
+      const sliderNode = h('div', {
+        staticClass: 'v-slider',
+        class: {
+          'v-slider--is-active': isActive.value
+        }
+      }, genChildren())
+
+      return withDirectives(sliderNode, [[ClickOutside, onBlur]])
+    }
+
+    function genDefaultSlot () {
+      const children = []
+      if (baseGenLabel) children.push(baseGenLabel())
+
+      const slider = genSlider()
+      if (props.inverseLabel) children.unshift(slider)
+      else children.push(slider)
+
+      children.push(genProgress())
+
+      return children
+    }
+
+    function onBlur (e) {
+      if (keyPressed.value === 2) return
+
+      isActive.value = false
+      if (proxy) proxy.isFocused = false
+      emit('blur', e)
+    }
+
+    function onFocus (e) {
+      if (proxy) proxy.isFocused = true
+      emit('focus', e)
+    }
+
+    function onThumbMouseDown (e) {
+      oldValue.value = internalValue.value
+      keyPressed.value = 2
       const options = { passive: true }
-      this.isActive = true
-      this.isFocused = false
+      isActive.value = true
+      if (proxy) proxy.isFocused = false
+
+      const target = app.value
+      if (!target) return
 
       if ('touches' in e) {
-        this.app.addEventListener('touchmove', this.onMouseMove, options)
-        addOnceEventListener(this.app, 'touchend', this.onSliderMouseUp)
+        target.addEventListener('touchmove', onMouseMove, options)
+        addOnceEventListener(target, 'touchend', onSliderMouseUp)
       } else {
-        this.app.addEventListener('mousemove', this.onMouseMove, options)
-        addOnceEventListener(this.app, 'mouseup', this.onSliderMouseUp)
+        target.addEventListener('mousemove', onMouseMove, options)
+        addOnceEventListener(target, 'mouseup', onSliderMouseUp)
       }
 
-      this.$emit('start', this.internalValue)
-    },
-    onSliderMouseUp () {
-      this.keyPressed = 0
+      emit('start', internalValue.value)
+    }
+
+    function onSliderMouseUp () {
+      keyPressed.value = 0
       const options = { passive: true }
-      this.isActive = false
-      this.isFocused = false
-      this.app.removeEventListener('touchmove', this.onMouseMove, options)
-      this.app.removeEventListener('mousemove', this.onMouseMove, options)
+      isActive.value = false
+      if (proxy) proxy.isFocused = false
 
-      this.$emit('end', this.internalValue)
-      if (!deepEqual(this.oldValue, this.internalValue)) {
-        this.$emit('change', this.internalValue)
+      const target = app.value
+      if (target) {
+        target.removeEventListener('touchmove', onMouseMove, options)
+        target.removeEventListener('mousemove', onMouseMove, options)
       }
-    },
-    onMouseMove (e) {
-      const { value, isInsideTrack } = this.parseMouseMove(e)
+
+      emit('end', internalValue.value)
+      if (!deepEqual(oldValue.value, internalValue.value)) {
+        emit('change', internalValue.value)
+      }
+    }
+
+    function onMouseMove (e) {
+      const { value, isInsideTrack } = parseMouseMove(e)
 
       if (isInsideTrack) {
-        this.setInternalValue(value)
+        setInternalValue(value)
       }
-    },
-    onKeyDown (e) {
-      if (this.disabled || this.readonly) return
+    }
 
-      const value = this.parseKeyDown(e)
+    function onKeyDown (e) {
+      if (props.disabled || props.readonly) return
+
+      const value = parseKeyDown(e)
 
       if (value == null) return
 
-      this.setInternalValue(value)
-      this.$emit('change', value)
-    },
-    onKeyUp () {
-      this.keyPressed = 0
-    },
-    onSliderClick (e) {
-      this.isFocused = true
-      this.onMouseMove(e)
-      this.$emit('change', this.internalValue)
-    },
-    parseMouseMove (e) {
-      const {
-        left: offsetLeft,
-        width: trackWidth
-      } = this.$refs.track.getBoundingClientRect()
+      setInternalValue(value)
+      emit('change', value)
+    }
+
+    function onKeyUp () {
+      keyPressed.value = 0
+    }
+
+    function onSliderClick (e) {
+      if (proxy) proxy.isFocused = true
+      onMouseMove(e)
+      emit('change', internalValue.value)
+    }
+
+    function parseMouseMove (e) {
+      const trackEl = track.value
+      if (!trackEl) {
+        return { value: internalValue.value, isInsideTrack: false }
+      }
+
+      const { left: offsetLeft, width: trackWidth } = trackEl.getBoundingClientRect()
       const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
-      // It is possible for left to be NaN, force to number
+
+      if (!trackWidth) {
+        return { value: internalValue.value, isInsideTrack: false }
+      }
+
       let left = Math.min(Math.max((clientX - offsetLeft) / trackWidth, 0), 1) || 0
 
-      if (this.$vuetify.rtl) left = 1 - left
+      if (rtl.value) left = 1 - left
 
       const isInsideTrack = clientX >= offsetLeft - 8 && clientX <= offsetLeft + trackWidth + 8
-      const value = parseFloat(this.min) + left * (this.max - this.min)
+      const value = minValue.value + left * (maxValue.value - minValue.value)
 
       return { value, isInsideTrack }
-    },
-    parseKeyDown (e, value = this.internalValue) {
-      if (this.disabled) return
+    }
+
+    function parseKeyDown (e, value = internalValue.value) {
+      if (props.disabled) return
 
       const { pageup, pagedown, end, home, left, right, down, up } = keyCodes
 
       if (![pageup, pagedown, end, home, left, right, down, up].includes(e.keyCode)) return
 
       e.preventDefault()
-      const step = this.stepNumeric || 1
-      const steps = (this.max - this.min) / step
-      if ([left, right, down, up].includes(e.keyCode)) {
-        this.keyPressed += 1
+      const step = stepNumeric.value || 1
+      const steps = (maxValue.value - minValue.value) / step
 
-        const increase = this.$vuetify.rtl ? [left, up] : [right, up]
+      if ([left, right, down, up].includes(e.keyCode)) {
+        keyPressed.value += 1
+
+        const increase = rtl.value ? [left, up] : [right, up]
         const direction = increase.includes(e.keyCode) ? 1 : -1
         const multiplier = e.shiftKey ? 3 : (e.ctrlKey ? 2 : 1)
 
-        value = value + (direction * step * multiplier)
+        value = Number(value) + (direction * step * multiplier)
       } else if (e.keyCode === home) {
-        value = parseFloat(this.min)
+        value = minValue.value
       } else if (e.keyCode === end) {
-        value = parseFloat(this.max)
-      } else /* if (e.keyCode === keyCodes.pageup || e.keyCode === pagedown) */ {
-        // Page up/down
+        value = maxValue.value
+      } else {
         const direction = e.keyCode === pagedown ? 1 : -1
-        value = value - (direction * step * (steps > 100 ? steps / 10 : 10))
+        value = Number(value) - (direction * step * (steps > 100 ? steps / 10 : 10))
       }
 
       return value
-    },
-    roundValue (value) {
-      if (!this.stepNumeric) return value
-      // Format input value using the same number
-      // of decimals places as in the step prop
-      const trimmedStep = this.step.toString().trim()
-      const decimals = trimmedStep.indexOf('.') > -1
-        ? (trimmedStep.length - trimmedStep.indexOf('.') - 1)
-        : 0
-      const offset = this.min % this.stepNumeric
+    }
 
-      const newValue = Math.round((value - offset) / this.stepNumeric) * this.stepNumeric + offset
+    function setInternalValue (value) {
+      internalValue.value = value
+    }
 
-      return parseFloat(Math.max(Math.min(newValue, this.max), this.min).toFixed(decimals))
-    },
-    setInternalValue (value) {
-      this.internalValue = value
+    const exposed = {
+      classes,
+      trackFillStyles,
+      trackPadding,
+      genDefaultSlot,
+      genSlider,
+      genChildren,
+      genInput,
+      genTrackContainer,
+      genSteps,
+      genThumb,
+      genThumbContainer,
+      genThumbLabel,
+      getLabel,
+      onBlur,
+      onFocus,
+      onThumbMouseDown,
+      onSliderMouseUp,
+      onMouseMove,
+      onKeyDown,
+      onKeyUp,
+      onSliderClick,
+      parseMouseMove,
+      parseKeyDown,
+      roundValue,
+      setInternalValue
+    }
+
+    expose(exposed)
+
+    return {
+      setBackgroundColor,
+      setTextColor,
+      genProgress,
+      app,
+      input,
+      track,
+      isActive,
+      keyPressed,
+      lazyValue,
+      oldValue,
+      minValue,
+      maxValue,
+      stepNumeric,
+      rtl,
+      roundValue,
+      internalValue,
+      inputWidth,
+      trackTransition,
+      trackPadding,
+      showTicks,
+      showThumbLabel,
+      computedColor,
+      computedTrackColor,
+      computedThumbColor,
+      trackFillStyles,
+      trackStyles,
+      tickStyles,
+      numTicks,
+      isDirty,
+      classes,
+      genDefaultSlot,
+      genSlider,
+      genChildren,
+      genInput,
+      genTrackContainer,
+      genSteps,
+      genThumb,
+      genThumbContainer,
+      genThumbLabel,
+      getLabel,
+      onBlur,
+      onFocus,
+      onThumbMouseDown,
+      onSliderMouseUp,
+      onMouseMove,
+      onKeyDown,
+      onKeyUp,
+      onSliderClick,
+      parseMouseMove,
+      parseKeyDown,
+      setInternalValue
     }
   }
 })
@@ -548,24 +672,41 @@ export function useSliderController () {
     throw new Error('[Vuetify] useSliderController must be called from within setup()')
   }
 
-  const call = method => (...args) => {
-    const target = proxy[method]
-    return typeof target === 'function' ? target.apply(proxy, args) : undefined
+  const exposed = instance && instance.exposed
+
+  const getExposed = key => exposed && exposed[key]
+
+  const getRef = key => {
+    const exposedValue = getExposed(key)
+    if (exposedValue !== undefined) return exposedValue
+    return proxy[key]
   }
 
-  const createComputed = getter => computed(() => getter(proxy))
+  const createHandler = key => {
+    const exposedHandler = getExposed(key)
+    if (typeof exposedHandler === 'function') {
+      return exposedHandler
+    }
+
+    const target = proxy && proxy[key]
+    if (typeof target === 'function') {
+      return (...args) => target.apply(proxy, args)
+    }
+
+    return undefined
+  }
 
   return {
-    classes: createComputed(vm => vm.classes),
-    trackFillStyles: createComputed(vm => vm.trackFillStyles),
-    trackPadding: createComputed(vm => vm.trackPadding),
-    genInput: call('genInput'),
-    genTrackContainer: call('genTrackContainer'),
-    genSteps: call('genSteps'),
-    genThumbContainer: call('genThumbContainer'),
-    onFocus: call('onFocus'),
-    onThumbMouseDown: call('onThumbMouseDown'),
-    parseMouseMove: call('parseMouseMove'),
-    parseKeyDown: call('parseKeyDown')
+    classes: getRef('classes'),
+    trackFillStyles: getRef('trackFillStyles'),
+    trackPadding: getRef('trackPadding'),
+    genInput: createHandler('genInput'),
+    genTrackContainer: createHandler('genTrackContainer'),
+    genSteps: createHandler('genSteps'),
+    genThumbContainer: createHandler('genThumbContainer'),
+    onFocus: createHandler('onFocus'),
+    onThumbMouseDown: createHandler('onThumbMouseDown'),
+    parseMouseMove: createHandler('parseMouseMove'),
+    parseKeyDown: createHandler('parseKeyDown')
   }
 }
