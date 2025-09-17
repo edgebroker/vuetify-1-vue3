@@ -30,7 +30,7 @@ export default defineComponent({
     ...themeProps
   },
 
-  setup (props, { slots, attrs, emit }) {
+  setup (props, { slots, attrs, emit, expose }) {
     const { setBackgroundColor } = useColorable(props)
     const { generateRouteLink } = useRoutable(props, { attrs, emit })
     const { themeClasses } = useThemeable(props)
@@ -77,6 +77,16 @@ export default defineComponent({
 
     onMounted(() => {
       deprecate('v-jumbotron', props.src ? 'v-img' : 'v-responsive', vm)
+    })
+
+    expose({
+      backgroundStyles,
+      classes,
+      styles,
+      genBackground,
+      genContent,
+      genImage,
+      genWrapper,
     })
 
     return () => {
