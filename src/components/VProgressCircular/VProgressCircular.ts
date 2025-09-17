@@ -1,14 +1,13 @@
 import "@/css/vuetify.css"
 
-// Mixins
-import Colorable from '../../mixins/colorable'
-import mixins from '../../util/mixins'
+// Composables
+import useColorable from '../../composables/useColorable'
 
 // Types
-import { CreateElement, VNode, VNodeChildrenArrayContents } from 'vue'
+import { defineComponent, computed, h, useAttrs } from 'vue'
+import { PropType } from 'vue'
 
-/* @vue/component */
-export default mixins(Colorable).extend({
+export default defineComponent({
   name: 'v-progress-circular',
 
   props: {
@@ -17,134 +16,130 @@ export default mixins(Colorable).extend({
     indeterminate: Boolean,
 
     rotate: {
-      type: [Number, String],
-      default: 0
+      type: [Number, String] as PropType<number | string>,
+      default: 0,
     },
 
     size: {
-      type: [Number, String],
-      default: 32
+      type: [Number, String] as PropType<number | string>,
+      default: 32,
     },
 
     width: {
-      type: [Number, String],
-      default: 4
+      type: [Number, String] as PropType<number | string>,
+      default: 4,
     },
 
     value: {
-      type: [Number, String],
-      default: 0
-    }
+      type: [Number, String] as PropType<number | string>,
+      default: 0,
+    },
+
+    color: String,
   },
 
-  computed: {
-    calculatedSize (): number {
-      return Number(this.size) + (this.button ? 8 : 0)
-    },
+  setup (props, { slots }) {
+    const attrs = useAttrs()
+    const { setTextColor } = useColorable(props)
 
-    circumference (): number {
-      return 2 * Math.PI * this.radius
-    },
+    const sizeNumber = computed(() => Number(props.size))
+    const widthNumber = computed(() => Number(props.width))
+    const rotateNumber = computed(() => Number(props.rotate))
 
-    classes (): object {
-      return {
-        'v-progress-circular--indeterminate': this.indeterminate,
-        'v-progress-circular--button': this.button
-      }
-    },
+    const calculatedSize = computed(() => sizeNumber.value + (props.button ? 8 : 0))
+    const radius = 20
+    const circumference = computed(() => 2 * Math.PI * radius)
 
-    normalizedValue (): number {
-      if (this.value < 0) {
-        return 0
-      }
+    const classes = computed(() => ({
+      'v-progress-circular--indeterminate': props.indeterminate,
+      'v-progress-circular--button': props.button,
+    }))
 
-      if (this.value > 100) {
-        return 100
-      }
+    const normalizedValue = computed(() => {
+      const parsed = parseFloat(String(props.value))
 
-      return parseFloat(this.value)
-    },
+      if (parsed < 0) return 0
+      if (parsed > 100) return 100
 
-    radius (): number {
-      return 20
-    },
+      return isNaN(parsed) ? 0 : parsed
+    })
 
-    strokeDashArray (): number {
-      return Math.round(this.circumference * 1000) / 1000
-    },
+    const viewBoxSize = computed(() => {
+      const size = sizeNumber.value || 1
+      return radius / (1 - widthNumber.value / size)
+    })
 
-    strokeDashOffset (): string {
-      return ((100 - this.normalizedValue) / 100) * this.circumference + 'px'
-    },
+    const strokeDashArray = computed(() => Math.round(circumference.value * 1000) / 1000)
+    const strokeDashOffset = computed(() => `${((100 - normalizedValue.value) / 100) * circumference.value}px`)
+    const strokeWidth = computed(() => (widthNumber.value / (sizeNumber.value || 1)) * viewBoxSize.value * 2)
 
-    strokeWidth (): number {
-      return Number(this.width) / +this.size * this.viewBoxSize * 2
-    },
+    const styles = computed(() => ({
+      height: `${calculatedSize.value}px`,
+      width: `${calculatedSize.value}px`,
+    }))
 
-    styles (): object {
-      return {
-        height: `${this.calculatedSize}px`,
-        width: `${this.calculatedSize}px`
-      }
-    },
+    const svgStyles = computed(() => ({
+      transform: `rotate(${rotateNumber.value}deg)`,
+    }))
 
-    svgStyles (): object {
-      return {
-        transform: `rotate(${Number(this.rotate)}deg)`
-      }
-    },
-
-    viewBoxSize (): number {
-      return this.radius / (1 - Number(this.width) / +this.size)
-    }
-  },
-
-  methods: {
-    genCircle (h: CreateElement, name: string, offset: string | number): VNode {
-      return h('circle', {
+    function genCircle (name: string, offset: string | number) {
+      const data: Record<string, any> = {
         class: `v-progress-circular__${name}`,
-        attrs: {
-          fill: 'transparent',
-          cx: 2 * this.viewBoxSize,
-          cy: 2 * this.viewBoxSize,
-          r: this.radius,
-          'stroke-width': this.strokeWidth,
-          'stroke-dasharray': this.strokeDashArray,
-          'stroke-dashoffset': offset
-        }
-      })
-    },
-    genSvg (h: CreateElement): VNode {
+        fill: 'transparent',
+        cx: 2 * viewBoxSize.value,
+        cy: 2 * viewBoxSize.value,
+        r: radius,
+        'stroke-width': strokeWidth.value,
+        'stroke-dasharray': strokeDashArray.value,
+        'stroke-dashoffset': offset,
+      }
+
+      return h('circle', data)
+    }
+
+    function genSvg () {
       const children = [
-        this.indeterminate || this.genCircle(h, 'underlay', 0),
-        this.genCircle(h, 'overlay', this.strokeDashOffset)
-      ] as VNodeChildrenArrayContents
+        props.indeterminate ? null : genCircle('underlay', 0),
+        genCircle('overlay', strokeDashOffset.value),
+      ]
 
       return h('svg', {
-        style: this.svgStyles,
-        attrs: {
-          xmlns: 'http://www.w3.org/2000/svg',
-          viewBox: `${this.viewBoxSize} ${this.viewBoxSize} ${2 * this.viewBoxSize} ${2 * this.viewBoxSize}`
-        }
+        style: svgStyles.value,
+        xmlns: 'http://www.w3.org/2000/svg',
+        viewBox: `${viewBoxSize.value} ${viewBoxSize.value} ${2 * viewBoxSize.value} ${2 * viewBoxSize.value}`,
       }, children)
     }
-  },
 
-  render (h): VNode {
-    const info = h('div', { staticClass: 'v-progress-circular__info' }, this.$slots.default)
-    const svg = this.genSvg(h)
+    return () => {
+      const slotContent = slots.default?.()
+      const info = h('div', { class: 'v-progress-circular__info' }, slotContent)
+      const svg = genSvg()
 
-    return h('div', this.setTextColor(this.color, {
-      staticClass: 'v-progress-circular',
-      attrs: {
-        'role': 'progressbar',
+      const { class: className, style: styleAttr, ...restAttrs } = attrs as Record<string, any>
+      const colorData = setTextColor(props.color)
+
+      const finalClass = [
+        'v-progress-circular',
+        classes.value,
+        colorData.class,
+        className,
+      ]
+
+      const finalStyle = {
+        ...styles.value,
+        ...(colorData.style || {}),
+        ...(styleAttr as Record<string, any> || {}),
+      }
+
+      return h('div', {
+        ...restAttrs,
+        class: finalClass,
+        style: finalStyle,
+        role: 'progressbar',
         'aria-valuemin': 0,
         'aria-valuemax': 100,
-        'aria-valuenow': this.indeterminate ? undefined : this.normalizedValue
-      },
-      class: this.classes,
-      style: this.styles,
-      on: this.$listeners
-    }), [svg, info])
-  }
+        'aria-valuenow': props.indeterminate ? undefined : normalizedValue.value,
+      }, [svg, info])
+    }
+  },
 })

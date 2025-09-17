@@ -5,152 +5,198 @@ import "@/css/vuetify.css"
 import VIcon from '../VIcon'
 import VLabel from '../VLabel'
 
-// Mixins
-import Colorable from '../../mixins/colorable'
-import Rippleable from '../../mixins/rippleable'
-import Themeable from '../../mixins/themeable'
-import Selectable from '../../mixins/selectable'
-import {
-  inject as RegistrableInject
-} from '../../mixins/registrable'
+// Composables
+import useColorable from '../../composables/useColorable'
+import useRippleable, { rippleableProps } from '../../composables/useRippleable'
+import useThemeable, { themeProps } from '../../composables/useThemeable'
+import useRegistrableInject from '../../composables/useRegistrableInject'
 
-/* @vue/component */
-export default {
+// Types
+import { defineComponent, h, ref, computed, onMounted, onBeforeUnmount, useAttrs } from 'vue'
+
+export default defineComponent({
   name: 'v-radio',
-
-  mixins: [
-    Colorable,
-    Rippleable,
-    RegistrableInject('radio', 'v-radio', 'v-radio-group'),
-    Themeable
-  ],
 
   inheritAttrs: false,
 
   props: {
     color: {
       type: String,
-      default: 'accent'
+      default: 'accent',
     },
     disabled: Boolean,
     label: String,
     onIcon: {
       type: String,
-      default: '$vuetify.icons.radioOn'
+      default: '$vuetify.icons.radioOn',
     },
     offIcon: {
       type: String,
-      default: '$vuetify.icons.radioOff'
+      default: '$vuetify.icons.radioOff',
     },
     readonly: Boolean,
-    value: null
+    value: null,
+    ...rippleableProps,
+    ...themeProps,
   },
 
-  data: () => ({
-    isActive: false,
-    isFocused: false,
-    parentError: false
-  }),
+  emits: ['change', 'focus', 'blur'],
 
-  computed: {
-    computedData () {
-      return this.setTextColor(!this.parentError && this.isActive && this.color, {
-        staticClass: 'v-radio',
-        'class': {
-          'v-radio--is-disabled': this.isDisabled,
-          'v-radio--is-focused': this.isFocused,
-          ...this.themeClasses
-        }
+  setup (props, { slots, emit }) {
+    const attrs = useAttrs()
+    const radioGroup = useRegistrableInject('radio', 'v-radio', 'v-radio-group') || null
+    const { setTextColor } = useColorable(props)
+    const { themeClasses } = useThemeable(props)
+
+    const isActive = ref(false)
+    const isFocused = ref(false)
+    const parentError = ref(false)
+
+    const computedData = computed(() => {
+      const color = !parentError.value && isActive.value ? props.color : undefined
+      return setTextColor(color, {
+        class: {
+          'v-radio': true,
+          'v-radio--is-disabled': isDisabled.value,
+          'v-radio--is-focused': isFocused.value,
+          ...themeClasses.value,
+        },
       })
-    },
-    computedColor () {
-      return this.isActive ? this.color : this.radio.validationState || false
-    },
-    computedIcon () {
-      return this.isActive
-        ? this.onIcon
-        : this.offIcon
-    },
-    hasState () {
-      return this.isActive || !!this.radio.validationState
-    },
-    isDisabled () {
-      return this.disabled || !!this.radio.disabled
-    },
-    isReadonly () {
-      return this.readonly || !!this.radio.readonly
+    })
+
+    const computedColor = computed(() => {
+      if (isActive.value) return props.color
+      return radioGroup && radioGroup.validationState ? radioGroup.validationState() : false
+    })
+
+    const computedIcon = computed(() => (isActive.value ? props.onIcon : props.offIcon))
+
+    const hasState = computed(() => {
+      const validation = computedColor.value
+      return isActive.value || !!validation
+    })
+
+    const isDisabled = computed(() => props.disabled || !!(radioGroup && radioGroup.disabled && radioGroup.disabled()))
+
+    const isReadonly = computed(() => props.readonly || !!(radioGroup && radioGroup.readonly && radioGroup.readonly()))
+
+    const radioValue = computed(() => props.value)
+
+    const radioItem = {
+      value: radioValue,
+      setIsActive: val => { isActive.value = val },
+      setParentError: val => { parentError.value = val },
+    }
+
+    onMounted(() => {
+      radioGroup && radioGroup.register && radioGroup.register(radioItem)
+    })
+
+    onBeforeUnmount(() => {
+      radioGroup && radioGroup.unregister && radioGroup.unregister(radioItem)
+    })
+
+    function onFocus (e) {
+      isFocused.value = true
+      emit('focus', e)
+    }
+
+    function onBlur (e) {
+      isFocused.value = false
+      emit('blur', e)
+      radioGroup && radioGroup.onRadioBlur && radioGroup.onRadioBlur(e)
+    }
+
+    function onChange () {
+      if (isDisabled.value || isReadonly.value) return
+
+      const mandatory = radioGroup && radioGroup.mandatory ? radioGroup.mandatory() : false
+
+      if (!isActive.value || !mandatory) {
+        emit('change', props.value)
+        radioGroup && radioGroup.onRadioChange && radioGroup.onRadioChange(props.value)
+      }
+    }
+
+    const { genRipple } = useRippleable(props, { onChange })
+
+    function genInput () {
+      const rawAttrs = { ...attrs }
+      const { id, ...restAttrs } = rawAttrs
+      const name = radioGroup && radioGroup.name ? radioGroup.name() : (radioGroup && radioGroup.uid ? `v-radio-${radioGroup.uid}` : undefined)
+
+      return h('input', {
+        ...restAttrs,
+        id,
+        type: 'radio',
+        role: 'radio',
+        name,
+        value: props.value,
+        checked: isActive.value,
+        disabled: isDisabled.value,
+        readonly: isReadonly.value,
+        'aria-checked': String(isActive.value),
+        'aria-label': props.label,
+        onFocus,
+        onBlur,
+        onChange,
+      })
+    }
+
+    function genLabel () {
+      const rawAttrs = { ...attrs }
+      const id = rawAttrs.id
+      const validation = computedColor.value || ''
+
+      if (!slots.label && !props.label) return null
+
+      return h(VLabel, {
+        for: id,
+        color: validation,
+        dark: props.dark,
+        focused: hasState.value,
+        light: props.light,
+        onClick: onChange,
+      }, slots.label ? slots.label : () => props.label)
+    }
+
+    function genRadio () {
+      const rippleColor = computedColor.value || undefined
+      const ripple = genRipple(setTextColor(rippleColor))
+
+      const icon = h(VIcon, setTextColor(rippleColor, {
+        props: {
+          dark: props.dark,
+          light: props.light,
+        },
+      }), { default: () => computedIcon.value })
+
+      return h('div', { class: 'v-input--selection-controls__input' }, [
+        genInput(),
+        ripple,
+        icon,
+      ])
+    }
+
+    return () => {
+      const rawAttrs = { ...attrs }
+      const { class: className, style: styleAttr, ...restAttrs } = rawAttrs
+      const data = computedData.value
+
+      const finalClass = [data.class, className].filter(Boolean)
+      const finalStyle = {
+        ...(data.style || {}),
+        ...(styleAttr || {}),
+      }
+
+      return h('div', {
+        ...restAttrs,
+        class: finalClass,
+        style: finalStyle,
+      }, [
+        genRadio(),
+        genLabel(),
+      ])
     }
   },
-
-  mounted () {
-    this.radio.register(this)
-  },
-
-  beforeDestroy () {
-    this.radio.unregister(this)
-  },
-
-  methods: {
-    genInput (...args) {
-      // We can't actually use the mixin directly because
-      // it's made for standalone components, but its
-      // genInput method is exactly what we need
-      return Selectable.options.methods.genInput.call(this, ...args)
-    },
-    genLabel () {
-      return this.$createElement(VLabel, {
-        on: { click: this.onChange },
-        attrs: {
-          for: this.id
-        },
-        props: {
-          color: this.radio.validationState || '',
-          dark: this.dark,
-          focused: this.hasState,
-          light: this.light
-        }
-      }, this.$slots.label || this.label)
-    },
-    genRadio () {
-      return this.$createElement('div', {
-        staticClass: 'v-input--selection-controls__input'
-      }, [
-        this.genInput('radio', {
-          name: this.radio.name || (this.radio._uid ? 'v-radio-' + this.radio._uid : false),
-          value: this.value,
-          ...this.$attrs
-        }),
-        this.genRipple(this.setTextColor(this.computedColor)),
-        this.$createElement(VIcon, this.setTextColor(this.computedColor, {
-          props: {
-            dark: this.dark,
-            light: this.light
-          }
-        }), this.computedIcon)
-      ])
-    },
-    onFocus (e) {
-      this.isFocused = true
-      this.$emit('focus', e)
-    },
-    onBlur (e) {
-      this.isFocused = false
-      this.$emit('blur', e)
-    },
-    onChange () {
-      if (this.isDisabled || this.isReadonly) return
-
-      if (!this.isDisabled && (!this.isActive || !this.radio.mandatory)) {
-        this.$emit('change', this.value)
-      }
-    },
-    onKeydown () {}
-  },
-
-  render (h) {
-    return h('div', this.computedData, [
-      this.genRadio(),
-      this.genLabel()
-    ])
-  }
-}
+})
