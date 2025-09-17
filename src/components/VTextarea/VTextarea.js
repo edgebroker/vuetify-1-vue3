@@ -39,9 +39,7 @@ export default defineComponent({
 
     const inputHeight = ref('auto')
 
-    const textField = useTextFieldController()
-    const baseGenInput = textField.base?.genInput
-    const baseOnInput = textField.base?.onInput
+    const { genInput: textFieldGenInput, onInput: textFieldOnInput } = useTextFieldController()
 
     const noResizeHandle = computed(() => props.noResize || props.autoGrow)
 
@@ -74,9 +72,9 @@ export default defineComponent({
     }
 
     function genInput () {
-      if (!baseGenInput) return null
+      if (!textFieldGenInput) return null
 
-      const input = baseGenInput()
+      const input = textFieldGenInput()
       if (!input || !input.data) return input
 
       input.tag = 'textarea'
@@ -91,7 +89,7 @@ export default defineComponent({
     }
 
     function onInput (e) {
-      baseOnInput && baseOnInput(e)
+      textFieldOnInput && textFieldOnInput(e)
       if (props.autoGrow) calculateInputHeight()
     }
 
