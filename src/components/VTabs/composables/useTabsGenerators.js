@@ -1,4 +1,4 @@
-import { getCurrentInstance, h } from 'vue'
+import { getCurrentInstance, h, withDirectives } from 'vue'
 
 import VTabsItems from '../VTabsItems'
 import VTabsSlider from '../VTabsSlider'
@@ -42,21 +42,25 @@ export default function useTabsGenerators () {
   }
 
   function genWrapper (item) {
-    return h('div', {
+    const wrapper = h('div', {
       staticClass: 'v-tabs__wrapper',
       class: {
         'v-tabs__wrapper--show-arrows': proxy?.hasArrows
       },
-      ref: 'wrapper',
-      directives: [{
-        name: 'touch',
-        value: {
-          start: e => proxy?.overflowCheck && proxy.overflowCheck(e, proxy.onTouchStart),
-          move: e => proxy?.overflowCheck && proxy.overflowCheck(e, proxy.onTouchMove),
-          end: e => proxy?.overflowCheck && proxy.overflowCheck(e, proxy.onTouchEnd)
-        }
-      }]
+      ref: 'wrapper'
     }, [item])
+
+    const touchDirective = proxy?.$options?.directives?.Touch || proxy?.$options?.directives?.touch
+
+    if (!touchDirective) return wrapper
+
+    const handler = {
+      start: e => proxy?.overflowCheck && proxy.overflowCheck(e, proxy.onTouchStart),
+      move: e => proxy?.overflowCheck && proxy.overflowCheck(e, proxy.onTouchMove),
+      end: e => proxy?.overflowCheck && proxy.overflowCheck(e, proxy.onTouchEnd)
+    }
+
+    return withDirectives(wrapper, [[touchDirective, handler]])
   }
 
   function genBar (items) {
