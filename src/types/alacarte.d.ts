@@ -1,10 +1,10 @@
-declare module 'vuetify/es5/components/Vuetify' {
+declare module 'vuetify/components/Vuetify' {
   const VuetifyPlugin: import('vuetify').Vuetify
 
   export default VuetifyPlugin
 }
 
-declare module 'vuetify/es5/components/*' {
+declare module 'vuetify/components/*' {
   const VuetifyComponent: {
     default: import('vuetify').ComponentOrPack
     [key: string]: import('vuetify').ComponentOrPack
@@ -13,7 +13,7 @@ declare module 'vuetify/es5/components/*' {
   export = VuetifyComponent
 }
 
-declare module 'vuetify/es5/directives' {
+declare module 'vuetify/directives' {
   const ClickOutside: import('vue').ObjectDirective
   const Ripple: import('vue').ObjectDirective
   const Resize: import('vue').ObjectDirective
