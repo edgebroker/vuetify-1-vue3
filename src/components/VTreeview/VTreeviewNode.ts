@@ -8,7 +8,7 @@ import useRegistrableInject from '../../composables/useRegistrableInject'
 // Utils
 import { getObjectValueByPath } from '../../util/helpers'
 import { defineComponent, h, ref, computed, getCurrentInstance, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import type { PropType } from 'vue'
+import type { PropType, Slot } from 'vue'
 
 export const VTreeviewNodeProps = {
   activatable: Boolean,
@@ -81,7 +81,7 @@ const VTreeviewNode = defineComponent({
     ...VTreeviewNodeProps
   },
 
-  setup (props, { slots }) {
+  setup (props, { slots, expose }) {
     const treeview = useRegistrableInject('treeview', 'v-treeview-node', 'v-treeview') as TreeviewProvide | null
     const vm = getCurrentInstance()
 
@@ -225,35 +225,39 @@ const VTreeviewNode = defineComponent({
     }
 
     function genChild (item: any) {
+      const nodeSlots: Record<string, Slot> = {}
+      for (const key in slots) {
+        if (key === 'default') continue
+        const slot = slots[key]
+        if (slot) nodeSlots[key] = slot
+      }
+
       return h(VTreeviewNode, {
         key: getObjectValueByPath(item, props.itemKey),
-        props: {
-          activatable: props.activatable,
-          activeClass: props.activeClass,
-          item,
-          selectable: props.selectable,
-          selectedColor: props.selectedColor,
-          expandIcon: props.expandIcon,
-          indeterminateIcon: props.indeterminateIcon,
-          offIcon: props.offIcon,
-          onIcon: props.onIcon,
-          loadingIcon: props.loadingIcon,
-          itemKey: props.itemKey,
-          itemText: props.itemText,
-          itemChildren: props.itemChildren,
-          loadChildren: props.loadChildren,
-          transition: props.transition,
-          openOnClick: props.openOnClick
-        },
-        scopedSlots: slots
-      })
+        activatable: props.activatable,
+        activeClass: props.activeClass,
+        item,
+        selectable: props.selectable,
+        selectedColor: props.selectedColor,
+        expandIcon: props.expandIcon,
+        indeterminateIcon: props.indeterminateIcon,
+        offIcon: props.offIcon,
+        onIcon: props.onIcon,
+        loadingIcon: props.loadingIcon,
+        itemKey: props.itemKey,
+        itemText: props.itemText,
+        itemChildren: props.itemChildren,
+        loadChildren: props.loadChildren,
+        transition: props.transition,
+        openOnClick: props.openOnClick
+      }, nodeSlots)
     }
 
     function genChildrenWrapper () {
       if (!isOpen.value || !children.value) return null
       return h('div', {
         staticClass: 'v-treeview-node__children'
-      }, [children.value.map(genChild)])
+      }, children.value.map(genChild))
     }
 
     function genTransition () {
@@ -272,7 +276,7 @@ const VTreeviewNode = defineComponent({
       }
     })
 
-    return {
+    expose({
       isOpen,
       isSelected,
       isIndeterminate,
@@ -296,24 +300,24 @@ const VTreeviewNode = defineComponent({
       genChildrenWrapper,
       genTransition,
       treeview
+    })
+
+    return () => {
+      const nodes = [genNode()]
+
+      if (props.transition) nodes.push(genTransition())
+      else nodes.push(genChildrenWrapper())
+
+      return h('div', {
+        staticClass: 'v-treeview-node',
+        class: {
+          'v-treeview-node--leaf': !hasChildren.value,
+          'v-treeview-node--click': props.openOnClick,
+          'v-treeview-node--selected': isSelected.value,
+          'v-treeview-node--excluded': treeview && treeview.isExcluded(key.value)
+        }
+      }, nodes)
     }
-  },
-
-  render () {
-    const children = [this.genNode()]
-
-    if (this.transition) children.push(this.genTransition())
-    else children.push(this.genChildrenWrapper())
-
-    return h('div', {
-      staticClass: 'v-treeview-node',
-      class: {
-        'v-treeview-node--leaf': !this.hasChildren,
-        'v-treeview-node--click': this.openOnClick,
-        'v-treeview-node--selected': this.isSelected,
-        'v-treeview-node--excluded': this.treeview && this.treeview.isExcluded(this.key)
-      }
-    }, children)
   }
 })
 
