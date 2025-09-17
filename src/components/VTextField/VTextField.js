@@ -22,7 +22,7 @@ import {
 import { deprecate } from '../../util/console'
 
 // Types
-import { defineComponent, getCurrentInstance } from 'vue'
+import { computed, defineComponent, getCurrentInstance, ref } from 'vue'
 
 const dirtyTypes = ['color', 'file', 'time', 'date', 'datetime-local', 'week', 'month']
 
@@ -75,110 +75,109 @@ export default defineComponent({
   },
 
   setup (props, context) {
+    const { attrs, emit, slots } = context
+    const instance = getCurrentInstance()
+    const proxy = instance?.proxy
+
     const maskable = useMaskable(props, context)
     const loadable = useLoadable(props, context)
 
-    return {
-      ...maskable,
-      ...loadable
-    }
-  },
+    const badInput = ref(false)
+    const initialValue = ref(null)
+    const internalChange = ref(false)
+    const isClearing = ref(false)
 
-  data: () => ({
-    badInput: false,
-    initialValue: null,
-    internalChange: false,
-    isClearing: false
-  }),
-
-  computed: {
-    classes () {
-      return {
-        'v-text-field': true,
-        'v-text-field--full-width': this.fullWidth,
-        'v-text-field--prefix': this.prefix,
-        'v-text-field--single-line': this.isSingle,
-        'v-text-field--solo': this.isSolo,
-        'v-text-field--solo-inverted': this.soloInverted,
-        'v-text-field--solo-flat': this.flat,
-        'v-text-field--box': this.box,
-        'v-text-field--enclosed': this.isEnclosed,
-        'v-text-field--reverse': this.reverse,
-        'v-text-field--outline': this.hasOutline,
-        'v-text-field--placeholder': this.placeholder
-      }
-    },
-    counterValue () {
-      return (this.internalValue || '').toString().length
-    },
-    directivesInput () {
-      return []
-    },
-    // TODO: Deprecate
-    hasOutline () {
-      return this.outline || this.textarea
-    },
-    internalValue: {
+    const textarea = computed(() => Boolean(attrs.textarea))
+    const isSolo = computed(() => props.solo || props.soloInverted)
+    const isSingle = computed(() => isSolo.value || props.singleLine)
+    const hasOutline = computed(() => props.outline || textarea.value)
+    const isEnclosed = computed(() => (
+      props.box ||
+      isSolo.value ||
+      hasOutline.value ||
+      props.fullWidth
+    ))
+    const isDirty = computed(() => {
+      const value = maskable.lazyValue?.value
+      return (value != null && value.toString().length > 0) || badInput.value
+    })
+    const isLabelActive = computed(() => isDirty.value || dirtyTypes.includes(props.type))
+    const prefixLabel = computed(() => Boolean(props.prefix && !props.value))
+    const prefixWidth = computed(() => {
+      const prefixRef = proxy?.$refs?.prefix
+      if (!props.prefix && !prefixRef) return undefined
+      return prefixRef ? prefixRef.offsetWidth : undefined
+    })
+    const labelValue = computed(() => {
+      const focused = proxy?.isFocused
+      return !isSingle.value && Boolean(focused || isLabelActive.value || props.placeholder || prefixLabel.value)
+    })
+    const labelPosition = computed(() => {
+      const offset = (props.prefix && !labelValue.value) ? (prefixWidth.value || 0) : 0
+      const rtl = proxy?.$vuetify?.rtl
+      return (!rtl !== !props.reverse)
+        ? { left: 'auto', right: offset }
+        : { left: offset, right: 'auto' }
+    })
+    const hasLabel = computed(() => Boolean(slots.label || props.label))
+    const showLabel = computed(() => hasLabel.value && (!isSingle.value || (!isLabelActive.value && !props.placeholder && !prefixLabel.value)))
+    const internalValue = computed({
       get () {
-        return this.lazyValue
+        return maskable.lazyValue?.value
       },
       set (val) {
-        if (this.mask && val !== this.lazyValue) {
-          this.lazyValue = this.unmaskText(this.maskText(this.unmaskText(val)))
-          this.setSelectionRange()
-        } else {
-          this.lazyValue = val
-          this.$emit('input', this.lazyValue)
+        if (props.mask && maskable.lazyValue && val !== maskable.lazyValue.value) {
+          maskable.lazyValue.value = maskable.unmaskText(maskable.maskText(maskable.unmaskText(val)))
+          maskable.setSelectionRange()
+        } else if (maskable.lazyValue) {
+          maskable.lazyValue.value = val
+          emit('input', maskable.lazyValue.value)
         }
       }
-    },
-    isDirty () {
-      return (this.lazyValue != null &&
-        this.lazyValue.toString().length > 0) ||
-        this.badInput
-    },
-    isEnclosed () {
-      return (
-        this.box ||
-        this.isSolo ||
-        this.hasOutline ||
-        this.fullWidth
-      )
-    },
-    isLabelActive () {
-      return this.isDirty || dirtyTypes.includes(this.type)
-    },
-    isSingle () {
-      return this.isSolo || this.singleLine
-    },
-    isSolo () {
-      return this.solo || this.soloInverted
-    },
-    labelPosition () {
-      const offset = (this.prefix && !this.labelValue) ? this.prefixWidth : 0
+    })
+    const counterValue = computed(() => {
+      const value = internalValue.value != null ? internalValue.value : ''
+      return value.toString().length
+    })
+    const directivesInput = computed(() => [])
+    const classes = computed(() => ({
+      'v-text-field': true,
+      'v-text-field--full-width': props.fullWidth,
+      'v-text-field--prefix': props.prefix,
+      'v-text-field--single-line': isSingle.value,
+      'v-text-field--solo': isSolo.value,
+      'v-text-field--solo-inverted': props.soloInverted,
+      'v-text-field--solo-flat': props.flat,
+      'v-text-field--box': props.box,
+      'v-text-field--enclosed': isEnclosed.value,
+      'v-text-field--reverse': props.reverse,
+      'v-text-field--outline': hasOutline.value,
+      'v-text-field--placeholder': props.placeholder
+    }))
 
-      return (!this.$vuetify.rtl !== !this.reverse) ? {
-        left: 'auto',
-        right: offset
-      } : {
-        left: offset,
-        right: 'auto'
-      }
-    },
-    showLabel () {
-      return this.hasLabel && (!this.isSingle || (!this.isLabelActive && !this.placeholder && !this.prefixLabel))
-    },
-    labelValue () {
-      return !this.isSingle &&
-        Boolean(this.isFocused || this.isLabelActive || this.placeholder || this.prefixLabel)
-    },
-    prefixWidth () {
-      if (!this.prefix && !this.$refs.prefix) return
-
-      return this.$refs.prefix.offsetWidth
-    },
-    prefixLabel () {
-      return (this.prefix && !this.value)
+    return {
+      ...maskable,
+      ...loadable,
+      badInput,
+      initialValue,
+      internalChange,
+      isClearing,
+      classes,
+      counterValue,
+      directivesInput,
+      hasOutline,
+      internalValue,
+      isDirty,
+      isEnclosed,
+      isLabelActive,
+      isSingle,
+      isSolo,
+      labelPosition,
+      showLabel,
+      labelValue,
+      prefixWidth,
+      prefixLabel,
+      textarea
     }
   },
 
