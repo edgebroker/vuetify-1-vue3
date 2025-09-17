@@ -7,7 +7,7 @@ import VMenu from '../VMenu'
 import VSelectList from './VSelectList'
 
 // Extensions
-import VTextField from '../VTextField/VTextField'
+import VTextField, { useTextFieldController } from '../VTextField/VTextField'
 
 // Composables
 import useColorable from '../../composables/useColorable'
@@ -22,7 +22,7 @@ import { camelize, getPropertyFromItem, keyCodes } from '../../util/helpers'
 import { consoleError, consoleWarn } from '../../util/console'
 
 // Types
-import { defineComponent, reactive, ref, watch, computed, getCurrentInstance } from 'vue'
+import { defineComponent, reactive, ref, watch, computed, getCurrentInstance, h, nextTick, onBeforeUnmount, onMounted } from 'vue'
 
 export const defaultMenuProps = {
   closeOnClick: false,
@@ -96,10 +96,25 @@ export default defineComponent({
     ...filterableProps
   },
 
-  setup (props) {
+  setup (props, { attrs, emit, expose, slots }) {
+    const vm = getCurrentInstance()
+    const proxy = vm?.proxy
+
     const { setTextColor } = useColorable(props)
     const { valueComparator } = useComparable(props)
     const { noDataText } = useFilterable(props)
+    const {
+      focus: textFieldFocus,
+      blur: textFieldBlur,
+      genInput: textFieldGenInput,
+      genLabel: textFieldGenLabel
+    } = useTextFieldController()
+
+    const baseGenAffix = proxy?.genAffix ? proxy.genAffix.bind(proxy) : undefined
+    const baseGenClearIcon = proxy?.genClearIcon ? proxy.genClearIcon.bind(proxy) : undefined
+    const baseGenIconSlot = proxy?.genIconSlot ? proxy.genIconSlot.bind(proxy) : undefined
+    const baseGenProgress = proxy?.genProgress ? proxy.genProgress.bind(proxy) : undefined
+    const baseOnMouseUp = proxy?.onMouseUp ? proxy.onMouseUp.bind(proxy) : undefined
 
     const attrsInput = reactive({ role: 'combobox' })
     const cachedItems = ref(props.cacheItems ? props.items.slice() : [])
@@ -110,15 +125,639 @@ export default defineComponent({
     const lazyValue = ref(props.value !== undefined
       ? props.value
       : props.multiple ? [] : undefined)
+    const menu = ref(null)
     const selectedIndex = ref(-1)
     const selectedItems = ref([])
     const keyboardLookupPrefix = ref('')
     const keyboardLookupLastTime = ref(0)
 
+    function getDisabled (item) {
+      return getPropertyFromItem(item, props.itemDisabled, false)
+    }
+
+    function getText (item) {
+      return getPropertyFromItem(item, props.itemText, item)
+    }
+
+    function getValue (item) {
+      return getPropertyFromItem(item, props.itemValue, getText(item))
+    }
+
+    function filterDuplicates (arr) {
+      const uniqueValues = new Map()
+      for (let index = 0; index < arr.length; ++index) {
+        const item = arr[index]
+        const val = getValue(item)
+
+        if (!uniqueValues.has(val)) uniqueValues.set(val, item)
+      }
+      return Array.from(uniqueValues.values())
+    }
+
+    const allItems = computed(() => filterDuplicates(cachedItems.value.concat(props.items)))
+    const computedItems = computed(() => allItems.value)
+    const hasChips = computed(() => props.chips || props.smallChips)
+    const isHidingSelected = computed(() => Boolean(props.hideSelected))
+    const baseClasses = computed(() => proxy?.classes || {})
+    const classes = computed(() => ({
+      ...baseClasses.value,
+      'v-select': true,
+      'v-select--chips': hasChips.value,
+      'v-select--chips--small': props.smallChips,
+      'v-select--is-menu-active': isMenuActive.value
+    }))
+    const counterValue = computed(() => {
+      return props.multiple
+        ? selectedItems.value.length
+        : (getText(selectedItems.value[0]) || '').toString().length
+    })
+
+    function closeConditional (e) {
+      const target = e?.target
+      const contentEl = content.value
+      const root = proxy?.$el
+
+      return (
+        !vm?.isUnmounted &&
+        !!contentEl &&
+        !contentEl.contains(target) &&
+        !!root &&
+        !root.contains(target) &&
+        target !== root
+      )
+    }
+
+    function blur (e) {
+      textFieldBlur && textFieldBlur(e)
+      isMenuActive.value = false
+      if (proxy) proxy.isFocused = false
+      selectedIndex.value = -1
+    }
+
+    const directives = computed(() => {
+      return proxy?.isFocused ? [{
+        name: 'click-outside',
+        value: blur,
+        args: { closeConditional }
+      }] : undefined
+    })
+
+    const dynamicHeight = computed(() => 'auto')
+    const hasSlot = computed(() => Boolean(hasChips.value || slots.selection))
+    const isDirty = computed(() => selectedItems.value.length > 0)
+
+    function selectItem (item) {
+      if (!props.multiple) {
+        setValue(props.returnObject ? item : getValue(item))
+        isMenuActive.value = false
+      } else {
+        const internal = (proxy?.internalValue || []).slice()
+        const i = findExistingIndex(item)
+
+        if (i !== -1) internal.splice(i, 1)
+        else internal.push(item)
+
+        setValue(internal.map(i => (props.returnObject ? i : getValue(i))))
+
+        nextTick(() => {
+          menu.value && typeof menu.value.updateDimensions === 'function' && menu.value.updateDimensions()
+        })
+      }
+    }
+
+    const listData = computed(() => {
+      const scopeId = vm?.vnode?.scopeId
+      return {
+        attrs: scopeId ? { [scopeId]: true } : null,
+        props: {
+          action: props.multiple && !isHidingSelected.value,
+          color: props.color,
+          dense: props.dense,
+          hideSelected: props.hideSelected,
+          items: virtualizedItems.value,
+          noDataText: proxy?.$vuetify?.t(noDataText.value),
+          selectedItems: selectedItems.value,
+          itemAvatar: props.itemAvatar,
+          itemDisabled: props.itemDisabled,
+          itemValue: props.itemValue,
+          itemText: props.itemText
+        },
+        on: {
+          select: selectItem
+        },
+        scopedSlots: {
+          item: slots.item
+        }
+      }
+    })
+
+    const staticList = computed(() => {
+      if (slots['no-data'] || slots['prepend-item'] || slots['append-item']) {
+        consoleError('assert: staticList should not be called if slots are used')
+      }
+
+      return h(VSelectList, listData.value)
+    })
+
+    const menuCanShow = computed(() => true)
+
+    const menuProps = computed(() => {
+      let normalisedProps = typeof props.menuProps === 'string'
+        ? props.menuProps.split(',')
+        : props.menuProps
+
+      if (Array.isArray(normalisedProps)) {
+        normalisedProps = normalisedProps.reduce((acc, p) => {
+          acc[p.trim()] = true
+          return acc
+        }, {})
+      }
+
+      const baseProps = {
+        ...defaultMenuProps,
+        value: menuCanShow.value && isMenuActive.value,
+        nudgeBottom: proxy?.nudgeBottom
+          ? proxy.nudgeBottom
+          : normalisedProps && normalisedProps.offsetY ? 1 : 0
+      }
+
+      return Object.assign({}, baseProps, normalisedProps)
+    })
+
+    const virtualizedItems = computed(() => {
+      return menuProps.value.auto
+        ? computedItems.value
+        : computedItems.value.slice(0, lastItem.value)
+    })
+
+    function focus (...args) {
+      textFieldFocus && textFieldFocus(...args)
+    }
+
+    function activateMenu () {
+      isMenuActive.value = true
+    }
+
+    function clearableCallback () {
+      setValue(props.multiple ? [] : undefined)
+      nextTick(() => {
+        const inputRef = proxy?.$refs?.input
+        inputRef && typeof inputRef.focus === 'function' && inputRef.focus()
+      })
+
+      if (props.openOnClear) isMenuActive.value = true
+    }
+
+    function findExistingIndex (item) {
+      const itemValue = getValue(item)
+      const internal = proxy?.internalValue || []
+      return internal.findIndex(i => valueComparator(getValue(i), itemValue))
+    }
+
+    function genChipSelection (item, index) {
+      const isDisabled = (
+        props.disabled ||
+        props.readonly ||
+        getDisabled(item)
+      )
+
+      return h(VChip, {
+        staticClass: 'v-chip--select-multi',
+        attrs: { tabindex: -1 },
+        props: {
+          close: props.deletableChips && !isDisabled,
+          disabled: isDisabled,
+          selected: index === selectedIndex.value,
+          small: props.smallChips
+        },
+        on: {
+          click: e => {
+            if (isDisabled) return
+
+            e.stopPropagation()
+
+            selectedIndex.value = index
+          },
+          input: () => onChipInput(item)
+        },
+        key: getValue(item)
+      }, { default: () => getText(item) })
+    }
+
+    function genCommaSelection (item, index, last) {
+      const key = JSON.stringify(getValue(item))
+      const color = index === selectedIndex.value && props.color
+      const isDisabled = props.disabled || getDisabled(item)
+
+      return h('div', setTextColor(color, {
+        staticClass: 'v-select__selection v-select__selection--comma',
+        class: {
+          'v-select__selection--disabled': isDisabled
+        },
+        key
+      }), `${getText(item)}${last ? '' : ', '}`)
+    }
+
+    function genSlotSelection (item, index) {
+      const slot = slots.selection
+      return slot ? slot({
+        parent: proxy,
+        item,
+        index,
+        selected: index === selectedIndex.value,
+        disabled: props.disabled || props.readonly
+      }) : undefined
+    }
+
+    function genSelections () {
+      let length = selectedItems.value.length
+      const children = new Array(length)
+
+      let genSelection
+      if (slots.selection) {
+        genSelection = genSlotSelection
+      } else if (hasChips.value) {
+        genSelection = genChipSelection
+      } else {
+        genSelection = genCommaSelection
+      }
+
+      while (length--) {
+        children[length] = genSelection(
+          selectedItems.value[length],
+          length,
+          length === children.length - 1
+        )
+      }
+
+      return h('div', {
+        staticClass: 'v-select__selections'
+      }, children)
+    }
+
+    function genInput () {
+      if (!textFieldGenInput) return null
+
+      const input = textFieldGenInput()
+      if (!input || !input.data) return input
+
+      input.data.domProps = input.data.domProps || {}
+      input.data.attrs = input.data.attrs || {}
+      input.data.on = input.data.on || {}
+
+      input.data.domProps.value = null
+      input.data.attrs.readonly = true
+      input.data.attrs['aria-readonly'] = String(props.readonly)
+      input.data.on.keypress = onKeyPress
+
+      return input
+    }
+
+    function genListWithSlot () {
+      const slotNames = ['prepend-item', 'no-data', 'append-item']
+        .filter(name => slots[name])
+      const slotNodes = slotNames.map(name => h('template', { slot: name }, slots[name]?.()))
+
+      return h(VSelectList, { ...listData.value }, slotNodes)
+    }
+
+    function genList () {
+      if (slots['no-data'] || slots['prepend-item'] || slots['append-item']) {
+        return genListWithSlot()
+      }
+
+      return staticList.value
+    }
+
+    function genMenu () {
+      const propsData = { ...menuProps.value, activator: proxy?.$refs?.['input-slot'] }
+
+      const inheritedProps = Object.keys(VMenu.options.props)
+
+      const deprecatedProps = Object.keys(attrs).reduce((acc, attr) => {
+        if (inheritedProps.includes(camelize(attr))) acc.push(attr)
+        return acc
+      }, [])
+
+      for (const prop of deprecatedProps) {
+        propsData[camelize(prop)] = attrs[prop]
+      }
+
+      if (process.env.NODE_ENV !== 'production' && deprecatedProps.length) {
+        const multiple = deprecatedProps.length > 1
+        let replacement = deprecatedProps.reduce((acc, p) => {
+          acc[camelize(p)] = attrs[p]
+          return acc
+        }, {})
+        const propsString = deprecatedProps.map(p => `'${p}'`).join(', ')
+        const separator = multiple ? '\n' : '\''
+
+        const onlyBools = Object.keys(replacement).every(prop => {
+          const propType = VMenu.options.props[prop]
+          const value = replacement[prop]
+          return value === true || ((propType.type || propType) === Boolean && value === '')
+        })
+
+        if (onlyBools) {
+          replacement = Object.keys(replacement).join(', ')
+        } else {
+          replacement = JSON.stringify(replacement, null, multiple ? 2 : 0)
+            .replace(/"([^(")"]+)":/g, '$1:')
+            .replace(/"/g, '\'')
+        }
+
+        consoleWarn(
+          `${propsString} ${multiple ? 'are' : 'is'} deprecated, use ` +
+          `${separator}${onlyBools ? '' : ':'}menu-props="${replacement}"${separator} instead`,
+          proxy
+        )
+      }
+
+      if (props.attach === '' || props.attach === true || props.attach === 'attach') {
+        propsData.attach = proxy?.$el
+      } else {
+        propsData.attach = props.attach
+      }
+
+      return h(VMenu, {
+        props: propsData,
+        on: {
+          input: val => {
+            isMenuActive.value = val
+            if (proxy) proxy.isFocused = val
+          }
+        },
+        ref: menu
+      }, [genList()])
+    }
+
+    function genDefaultSlot () {
+      const selections = genSelections()
+      const input = genInput()
+
+      if (Array.isArray(selections)) {
+        selections.push(input)
+      } else if (selections) {
+        selections.children = selections.children || []
+        selections.children.push(input)
+      }
+
+      return [
+        h('div', {
+          staticClass: 'v-select__slot',
+          directives: directives.value
+        }, [
+          textFieldGenLabel ? textFieldGenLabel() : null,
+          props.prefix && baseGenAffix ? baseGenAffix('prefix') : null,
+          selections,
+          props.suffix && baseGenAffix ? baseGenAffix('suffix') : null,
+          baseGenClearIcon ? baseGenClearIcon() : null,
+          baseGenIconSlot ? baseGenIconSlot() : null
+        ]),
+        genMenu(),
+        baseGenProgress ? baseGenProgress() : null
+      ]
+    }
+
+    function getMenuIndex () {
+      return menu.value ? menu.value.listIndex : -1
+    }
+
+    function onBlur (e) {
+      if (e) emit('blur', e)
+    }
+
+    function onChipInput (item) {
+      if (props.multiple) selectItem(item)
+      else setValue(null)
+
+      if (selectedItems.value.length === 0) {
+        isMenuActive.value = true
+      } else {
+        isMenuActive.value = false
+      }
+      selectedIndex.value = -1
+    }
+
+    function onClick () {
+      if (proxy?.isDisabled) return
+
+      isMenuActive.value = true
+
+      if (proxy && !proxy.isFocused) {
+        proxy.isFocused = true
+        emit('focus')
+      }
+    }
+
+    function onEnterDown () {
+      onBlur()
+    }
+
+    function onEscDown (e) {
+      e.preventDefault()
+      if (isMenuActive.value) {
+        e.stopPropagation()
+        isMenuActive.value = false
+      }
+    }
+
+    function onKeyPress (e) {
+      if (props.multiple) return
+
+      const KEYBOARD_LOOKUP_THRESHOLD = 1000
+      const now = performance.now()
+      if (now - keyboardLookupLastTime.value > KEYBOARD_LOOKUP_THRESHOLD) {
+        keyboardLookupPrefix.value = ''
+      }
+      keyboardLookupPrefix.value += e.key.toLowerCase()
+      keyboardLookupLastTime.value = now
+
+      const index = allItems.value.findIndex(item => {
+        const text = (getText(item) || '').toString()
+        return text.toLowerCase().startsWith(keyboardLookupPrefix.value)
+      })
+      const item = allItems.value[index]
+      if (index !== -1) {
+        setValue(props.returnObject ? item : getValue(item))
+        setTimeout(() => setMenuIndex(index))
+      }
+    }
+
+    function onKeyDown (e) {
+      const keyCode = e.keyCode
+
+      if (!props.readonly && !isMenuActive.value && [
+        keyCodes.enter,
+        keyCodes.space,
+        keyCodes.up,
+        keyCodes.down
+      ].includes(keyCode)) activateMenu()
+
+      if (isMenuActive.value && menu.value && typeof menu.value.changeListIndex === 'function') {
+        menu.value.changeListIndex(e)
+      }
+
+      if (keyCode === keyCodes.enter) return onEnterDown(e)
+      if (keyCode === keyCodes.esc) return onEscDown(e)
+      if (keyCode === keyCodes.tab) return onTabDown(e)
+    }
+
+    function onMouseUp (e) {
+      if (proxy?.hasMouseDown) {
+        const appendInner = proxy?.$refs?.['append-inner']
+
+        if (
+          isMenuActive.value &&
+          appendInner &&
+          (appendInner === e.target || appendInner.contains(e.target))
+        ) {
+          nextTick(() => { isMenuActive.value = !isMenuActive.value })
+        } else if ((proxy?.isEnclosed || false) && !proxy?.isDisabled) {
+          isMenuActive.value = true
+        }
+      }
+
+      baseOnMouseUp && baseOnMouseUp(e)
+    }
+
+    function onScroll () {
+      if (!isMenuActive.value) {
+        requestAnimationFrame(() => {
+          if (content.value) content.value.scrollTop = 0
+        })
+      } else {
+        if (lastItem.value >= computedItems.value.length) return
+
+        const el = content.value
+        if (!el) return
+
+        const showMoreItems = (
+          el.scrollHeight - (el.scrollTop + el.clientHeight)
+        ) < 200
+
+        if (showMoreItems) {
+          lastItem.value += 20
+        }
+      }
+    }
+
+    function onTabDown (e) {
+      const menuIndex = getMenuIndex()
+      const listTile = menu.value && menu.value.tiles ? menu.value.tiles[menuIndex] : undefined
+
+      if (
+        listTile &&
+        listTile.className.indexOf('v-list__tile--highlighted') > -1 &&
+        isMenuActive.value &&
+        menuIndex > -1
+      ) {
+        e.preventDefault()
+        e.stopPropagation()
+
+        listTile.click()
+      } else {
+        blur(e)
+      }
+    }
+
+    function setMenuIndex (index) {
+      if (menu.value) menu.value.listIndex = index
+    }
+
+    function setSelectedItems () {
+      const selected = []
+      const values = !props.multiple || !Array.isArray(proxy?.internalValue)
+        ? [proxy?.internalValue]
+        : proxy?.internalValue
+
+      for (const value of values) {
+        const index = allItems.value.findIndex(v => valueComparator(
+          getValue(v),
+          getValue(value)
+        ))
+
+        if (index > -1) selected.push(allItems.value[index])
+      }
+
+      selectedItems.value = selected
+    }
+
+    function setValue (value) {
+      const oldValue = proxy?.internalValue
+      if (proxy) proxy.internalValue = value
+      if (value !== oldValue) emit('change', value)
+    }
+
     watch(() => props.value, val => {
       lazyValue.value = val !== undefined
         ? val
         : (props.multiple ? [] : undefined)
+    })
+
+    watch(() => proxy?.internalValue, val => {
+      if (proxy) proxy.initialValue = val
+      setSelectedItems()
+    })
+
+    watch(isBooted, val => {
+      if (!val) return
+      nextTick(() => {
+        if (content.value && content.value.addEventListener) {
+          content.value.addEventListener('scroll', onScroll, false)
+        }
+      })
+    })
+
+    watch(isMenuActive, val => {
+      if (val) isBooted.value = true
+    })
+
+    watch(() => props.items, val => {
+      if (props.cacheItems) {
+        cachedItems.value = filterDuplicates(cachedItems.value.concat(val))
+      }
+
+      setSelectedItems()
+    }, { immediate: true })
+
+    watch(menu, val => {
+      content.value = val && val.$refs ? val.$refs.content : null
+    })
+
+    watch(content, (val, oldVal) => {
+      if (oldVal && oldVal.removeEventListener) {
+        oldVal.removeEventListener('scroll', onScroll, false)
+      }
+
+      if (val && isBooted.value && val.addEventListener) {
+        val.addEventListener('scroll', onScroll, false)
+      }
+    })
+
+    onMounted(() => {
+      content.value = menu.value && menu.value.$refs ? menu.value.$refs.content : null
+
+      if (isBooted.value && content.value && content.value.addEventListener) {
+        content.value.addEventListener('scroll', onScroll, false)
+      }
+    })
+
+    onBeforeUnmount(() => {
+      if (content.value && content.value.removeEventListener) {
+        content.value.removeEventListener('scroll', onScroll, false)
+      }
+    })
+
+    expose({
+      blur,
+      focus,
+      activateMenu,
+      genChipSelection,
+      genCommaSelection,
+      genSelections,
+      selectItem,
+      setValue
     })
 
     return {
@@ -132,618 +771,59 @@ export default defineComponent({
       isMenuActive,
       lastItem,
       lazyValue,
+      menu,
       selectedIndex,
       selectedItems,
       keyboardLookupPrefix,
-      keyboardLookupLastTime
-    }
-  },
-
-  computed: {
-    /* All items that the select has */
-    allItems () {
-      return this.filterDuplicates(this.cachedItems.concat(this.items))
-    },
-    classes () {
-      return Object.assign({}, VTextField.options.computed.classes.call(this), {
-        'v-select': true,
-        'v-select--chips': this.hasChips,
-        'v-select--chips--small': this.smallChips,
-        'v-select--is-menu-active': this.isMenuActive
-      })
-    },
-    /* Used by other components to overwrite */
-    computedItems () {
-      return this.allItems
-    },
-    counterValue () {
-      return this.multiple
-        ? this.selectedItems.length
-        : (this.getText(this.selectedItems[0]) || '').toString().length
-    },
-    directives () {
-      return this.isFocused ? [{
-        name: 'click-outside',
-        value: this.blur,
-        args: {
-          closeConditional: this.closeConditional
-        }
-      }] : undefined
-    },
-    dynamicHeight () {
-      return 'auto'
-    },
-    hasChips () {
-      return this.chips || this.smallChips
-    },
-    hasSlot () {
-      return Boolean(this.hasChips || this.$scopedSlots.selection)
-    },
-    isDirty () {
-      return this.selectedItems.length > 0
-    },
-    listData () {
-      const scopeId = this.$vnode && this.$vnode.context.$options._scopeId
-      return {
-        attrs: scopeId ? {
-          [scopeId]: true
-        } : null,
-        props: {
-          action: this.multiple && !this.isHidingSelected,
-          color: this.color,
-          dense: this.dense,
-          hideSelected: this.hideSelected,
-          items: this.virtualizedItems,
-          noDataText: this.$vuetify.t(this.noDataText),
-          selectedItems: this.selectedItems,
-          itemAvatar: this.itemAvatar,
-          itemDisabled: this.itemDisabled,
-          itemValue: this.itemValue,
-          itemText: this.itemText
-        },
-        on: {
-          select: this.selectItem
-        },
-        scopedSlots: {
-          item: this.$scopedSlots.item
-        }
-      }
-    },
-    staticList () {
-      if (this.$slots['no-data'] || this.$slots['prepend-item'] || this.$slots['append-item']) {
-        consoleError('assert: staticList should not be called if slots are used')
-      }
-
-      return this.$createElement(VSelectList, this.listData)
-    },
-    virtualizedItems () {
-      return this.$_menuProps.auto
-        ? this.computedItems
-        : this.computedItems.slice(0, this.lastItem)
-    },
-    menuCanShow () { return true },
-    $_menuProps () {
-      let normalisedProps
-
-      normalisedProps = typeof this.menuProps === 'string'
-        ? this.menuProps.split(',')
-        : this.menuProps
-
-      if (Array.isArray(normalisedProps)) {
-        normalisedProps = normalisedProps.reduce((acc, p) => {
-          acc[p.trim()] = true
-          return acc
-        }, {})
-      }
-
-      return {
-        ...defaultMenuProps,
-        value: this.menuCanShow && this.isMenuActive,
-        nudgeBottom: this.nudgeBottom
-          ? this.nudgeBottom
-          : normalisedProps.offsetY ? 1 : 0, // convert to int
-        ...normalisedProps
-      }
-    }
-  },
-
-  watch: {
-    internalValue (val) {
-      this.initialValue = val
-      this.setSelectedItems()
-    },
-    isBooted () {
-      this.$nextTick(() => {
-        if (this.content && this.content.addEventListener) {
-          this.content.addEventListener('scroll', this.onScroll, false)
-        }
-      })
-    },
-    isMenuActive (val) {
-      if (!val) return
-
-      this.isBooted = true
-    },
-    items: {
-      immediate: true,
-      handler (val) {
-        if (this.cacheItems) {
-          this.cachedItems = this.filterDuplicates(this.cachedItems.concat(val))
-        }
-
-        this.setSelectedItems()
-      }
-    }
-  },
-
-  mounted () {
-    this.content = this.$refs.menu && this.$refs.menu.$refs.content
-  },
-
-  methods: {
-    /** @public */
-    blur (e) {
-      VTextField.options.methods.blur.call(this, e)
-      this.isMenuActive = false
-      this.isFocused = false
-      this.selectedIndex = -1
-    },
-    /** @public */
-    activateMenu () {
-      this.isMenuActive = true
-    },
-    clearableCallback () {
-      this.setValue(this.multiple ? [] : undefined)
-      this.$nextTick(() => this.$refs.input.focus())
-
-      if (this.openOnClear) this.isMenuActive = true
-    },
-    closeConditional (e) {
-      return (
-        !this._isDestroyed &&
-
-        // Click originates from outside the menu content
-        !!this.content &&
-        !this.content.contains(e.target) &&
-
-        // Click originates from outside the element
-        !!this.$el &&
-        !this.$el.contains(e.target) &&
-        e.target !== this.$el
-      )
-    },
-    filterDuplicates (arr) {
-      const uniqueValues = new Map()
-      for (let index = 0; index < arr.length; ++index) {
-        const item = arr[index]
-        const val = this.getValue(item)
-
-        // TODO: comparator
-        !uniqueValues.has(val) && uniqueValues.set(val, item)
-      }
-      return Array.from(uniqueValues.values())
-    },
-    findExistingIndex (item) {
-      const itemValue = this.getValue(item)
-
-      return (this.internalValue || []).findIndex(i => this.valueComparator(this.getValue(i), itemValue))
-    },
-    genChipSelection (item, index) {
-      const isDisabled = (
-        this.disabled ||
-        this.readonly ||
-        this.getDisabled(item)
-      )
-
-      return this.$createElement(VChip, {
-        staticClass: 'v-chip--select-multi',
-        attrs: { tabindex: -1 },
-        props: {
-          close: this.deletableChips && !isDisabled,
-          disabled: isDisabled,
-          selected: index === this.selectedIndex,
-          small: this.smallChips
-        },
-        on: {
-          click: e => {
-            if (isDisabled) return
-
-            e.stopPropagation()
-
-            this.selectedIndex = index
-          },
-          input: () => this.onChipInput(item)
-        },
-        key: this.getValue(item)
-      }, this.getText(item))
-    },
-    genCommaSelection (item, index, last) {
-      // Item may be an object
-      // TODO: Remove JSON.stringify
-      const key = JSON.stringify(this.getValue(item))
-      const color = index === this.selectedIndex && this.color
-      const isDisabled = (
-        this.disabled ||
-        this.getDisabled(item)
-      )
-
-      return this.$createElement('div', this.setTextColor(color, {
-        staticClass: 'v-select__selection v-select__selection--comma',
-        'class': {
-          'v-select__selection--disabled': isDisabled
-        },
-        key
-      }), `${this.getText(item)}${last ? '' : ', '}`)
-    },
-    genDefaultSlot () {
-      const selections = this.genSelections()
-      const input = this.genInput()
-
-      // If the return is an empty array
-      // push the input
-      if (Array.isArray(selections)) {
-        selections.push(input)
-      // Otherwise push it into children
-      } else {
-        selections.children = selections.children || []
-        selections.children.push(input)
-      }
-
-      return [
-        this.$createElement('div', {
-          staticClass: 'v-select__slot',
-          directives: this.directives
-        }, [
-          this.genLabel(),
-          this.prefix ? this.genAffix('prefix') : null,
-          selections,
-          this.suffix ? this.genAffix('suffix') : null,
-          this.genClearIcon(),
-          this.genIconSlot()
-        ]),
-        this.genMenu(),
-        this.genProgress()
-      ]
-    },
-    genInput () {
-      const input = VTextField.options.methods.genInput.call(this)
-
-      input.data.domProps.value = null
-      input.data.attrs.readonly = true
-      input.data.attrs['aria-readonly'] = String(this.readonly)
-      input.data.on.keypress = this.onKeyPress
-
-      return input
-    },
-    genList () {
-      // If there's no slots, we can use a cached VNode to improve performance
-      if (this.$slots['no-data'] || this.$slots['prepend-item'] || this.$slots['append-item']) {
-        return this.genListWithSlot()
-      } else {
-        return this.staticList
-      }
-    },
-    genListWithSlot () {
-      const slots = ['prepend-item', 'no-data', 'append-item']
-        .filter(slotName => this.$slots[slotName])
-        .map(slotName => this.$createElement('template', {
-          slot: slotName
-        }, this.$slots[slotName]))
-      // Requires destructuring due to Vue
-      // modifying the `on` property when passed
-      // as a referenced object
-      return this.$createElement(VSelectList, {
-        ...this.listData
-      }, slots)
-    },
-    genMenu () {
-      const props = this.$_menuProps
-      props.activator = this.$refs['input-slot']
-
-      // Deprecate using menu props directly
-      // TODO: remove (2.0)
-      const inheritedProps = Object.keys(VMenu.options.props)
-
-      const deprecatedProps = Object.keys(this.$attrs).reduce((acc, attr) => {
-        if (inheritedProps.includes(camelize(attr))) acc.push(attr)
-        return acc
-      }, [])
-
-      for (const prop of deprecatedProps) {
-        props[camelize(prop)] = this.$attrs[prop]
-      }
-
-      if (process.env.NODE_ENV !== 'production') {
-        if (deprecatedProps.length) {
-          const multiple = deprecatedProps.length > 1
-          let replacement = deprecatedProps.reduce((acc, p) => {
-            acc[camelize(p)] = this.$attrs[p]
-            return acc
-          }, {})
-          const props = deprecatedProps.map(p => `'${p}'`).join(', ')
-          const separator = multiple ? '\n' : '\''
-
-          const onlyBools = Object.keys(replacement).every(prop => {
-            const propType = VMenu.options.props[prop]
-            const value = replacement[prop]
-            return value === true || ((propType.type || propType) === Boolean && value === '')
-          })
-
-          if (onlyBools) {
-            replacement = Object.keys(replacement).join(', ')
-          } else {
-            replacement = JSON.stringify(replacement, null, multiple ? 2 : 0)
-              .replace(/"([^(")"]+)":/g, '$1:')
-              .replace(/"/g, '\'')
-          }
-
-          consoleWarn(
-            `${props} ${multiple ? 'are' : 'is'} deprecated, use ` +
-            `${separator}${onlyBools ? '' : ':'}menu-props="${replacement}"${separator} instead`,
-            this
-          )
-        }
-      }
-
-      // Attach to root el so that
-      // menu covers prepend/append icons
-      if (
-        // TODO: make this a computed property or helper or something
-        this.attach === '' || // If used as a boolean prop (<v-menu attach>)
-        this.attach === true || // If bound to a boolean (<v-menu :attach="true">)
-        this.attach === 'attach' // If bound as boolean prop in pug (v-menu(attach))
-      ) {
-        props.attach = this.$el
-      } else {
-        props.attach = this.attach
-      }
-
-      return this.$createElement(VMenu, {
-        props,
-        on: {
-          input: val => {
-            this.isMenuActive = val
-            this.isFocused = val
-          }
-        },
-        ref: 'menu'
-      }, [this.genList()])
-    },
-    genSelections () {
-      let length = this.selectedItems.length
-      const children = new Array(length)
-
-      let genSelection
-      if (this.$scopedSlots.selection) {
-        genSelection = this.genSlotSelection
-      } else if (this.hasChips) {
-        genSelection = this.genChipSelection
-      } else {
-        genSelection = this.genCommaSelection
-      }
-
-      while (length--) {
-        children[length] = genSelection(
-          this.selectedItems[length],
-          length,
-          length === children.length - 1
-        )
-      }
-
-      return this.$createElement('div', {
-        staticClass: 'v-select__selections'
-      }, children)
-    },
-    genSlotSelection (item, index) {
-      return this.$scopedSlots.selection({
-        parent: this,
-        item,
-        index,
-        selected: index === this.selectedIndex,
-        disabled: this.disabled || this.readonly
-      })
-    },
-    getMenuIndex () {
-      return this.$refs.menu ? this.$refs.menu.listIndex : -1
-    },
-    getDisabled (item) {
-      return getPropertyFromItem(item, this.itemDisabled, false)
-    },
-    getText (item) {
-      return getPropertyFromItem(item, this.itemText, item)
-    },
-    getValue (item) {
-      return getPropertyFromItem(item, this.itemValue, this.getText(item))
-    },
-    onBlur (e) {
-      e && this.$emit('blur', e)
-    },
-    onChipInput (item) {
-      if (this.multiple) this.selectItem(item)
-      else this.setValue(null)
-      // If all items have been deleted,
-      // open `v-menu`
-      if (this.selectedItems.length === 0) {
-        this.isMenuActive = true
-      } else {
-        this.isMenuActive = false
-      }
-      this.selectedIndex = -1
-    },
-    onClick () {
-      if (this.isDisabled) return
-
-      this.isMenuActive = true
-
-      if (!this.isFocused) {
-        this.isFocused = true
-        this.$emit('focus')
-      }
-    },
-    onEnterDown () {
-      this.onBlur()
-    },
-    onEscDown (e) {
-      e.preventDefault()
-      if (this.isMenuActive) {
-        e.stopPropagation()
-        this.isMenuActive = false
-      }
-    },
-    onKeyPress (e) {
-      if (this.multiple) return
-
-      const KEYBOARD_LOOKUP_THRESHOLD = 1000 // milliseconds
-      const now = performance.now()
-      if (now - this.keyboardLookupLastTime > KEYBOARD_LOOKUP_THRESHOLD) {
-        this.keyboardLookupPrefix = ''
-      }
-      this.keyboardLookupPrefix += e.key.toLowerCase()
-      this.keyboardLookupLastTime = now
-
-      const index = this.allItems.findIndex(item => {
-        const text = (this.getText(item) || '').toString()
-
-        return text.toLowerCase().startsWith(this.keyboardLookupPrefix)
-      })
-      const item = this.allItems[index]
-      if (index !== -1) {
-        this.setValue(this.returnObject ? item : this.getValue(item))
-        setTimeout(() => this.setMenuIndex(index))
-      }
-    },
-    onKeyDown (e) {
-      const keyCode = e.keyCode
-
-      // If enter, space, up, or down is pressed, open menu
-      if (!this.readonly && !this.isMenuActive && [
-        keyCodes.enter,
-        keyCodes.space,
-        keyCodes.up, keyCodes.down
-      ].includes(keyCode)) this.activateMenu()
-
-      if (this.isMenuActive && this.$refs.menu) this.$refs.menu.changeListIndex(e)
-
-      // This should do something different
-      if (keyCode === keyCodes.enter) return this.onEnterDown(e)
-
-      // If escape deactivate the menu
-      if (keyCode === keyCodes.esc) return this.onEscDown(e)
-
-      // If tab - select item or close menu
-      if (keyCode === keyCodes.tab) return this.onTabDown(e)
-    },
-    onMouseUp (e) {
-      if (this.hasMouseDown) {
-        const appendInner = this.$refs['append-inner']
-
-        // If append inner is present
-        // and the target is itself
-        // or inside, toggle menu
-        if (this.isMenuActive &&
-          appendInner &&
-          (appendInner === e.target ||
-          appendInner.contains(e.target))
-        ) {
-          this.$nextTick(() => (this.isMenuActive = !this.isMenuActive))
-        // If user is clicking in the container
-        // and field is enclosed, activate it
-        } else if (this.isEnclosed && !this.isDisabled) {
-          this.isMenuActive = true
-        }
-      }
-
-      VTextField.options.methods.onMouseUp.call(this, e)
-    },
-    onScroll () {
-      if (!this.isMenuActive) {
-        requestAnimationFrame(() => (this.content.scrollTop = 0))
-      } else {
-        if (this.lastItem >= this.computedItems.length) return
-
-        const showMoreItems = (
-          this.content.scrollHeight -
-          (this.content.scrollTop +
-          this.content.clientHeight)
-        ) < 200
-
-        if (showMoreItems) {
-          this.lastItem += 20
-        }
-      }
-    },
-    onTabDown (e) {
-      const menuIndex = this.getMenuIndex()
-
-      const listTile = this.$refs.menu.tiles[menuIndex]
-
-      // An item that is selected by
-      // menu-index should toggled
-      if (
-        listTile &&
-        listTile.className.indexOf('v-list__tile--highlighted') > -1 &&
-        this.isMenuActive &&
-        menuIndex > -1
-      ) {
-        e.preventDefault()
-        e.stopPropagation()
-
-        listTile.click()
-      } else {
-        // If we make it here,
-        // the user has no selected indexes
-        // and is probably tabbing out
-        this.blur(e)
-      }
-    },
-    selectItem (item) {
-      if (!this.multiple) {
-        this.setValue(this.returnObject ? item : this.getValue(item))
-        this.isMenuActive = false
-      } else {
-        const internalValue = (this.internalValue || []).slice()
-        const i = this.findExistingIndex(item)
-
-        i !== -1 ? internalValue.splice(i, 1) : internalValue.push(item)
-        this.setValue(internalValue.map(i => {
-          return this.returnObject ? i : this.getValue(i)
-        }))
-
-        // When selecting multiple
-        // adjust menu after each
-        // selection
-        this.$nextTick(() => {
-          this.$refs.menu &&
-            this.$refs.menu.updateDimensions()
-        })
-      }
-    },
-    setMenuIndex (index) {
-      this.$refs.menu && (this.$refs.menu.listIndex = index)
-    },
-    setSelectedItems () {
-      const selectedItems = []
-      const values = !this.multiple || !Array.isArray(this.internalValue)
-        ? [this.internalValue]
-        : this.internalValue
-
-      for (const value of values) {
-        const index = this.allItems.findIndex(v => this.valueComparator(
-          this.getValue(v),
-          this.getValue(value)
-        ))
-
-        if (index > -1) {
-          selectedItems.push(this.allItems[index])
-        }
-      }
-
-      this.selectedItems = selectedItems
-    },
-    setValue (value) {
-      const oldValue = this.internalValue
-      this.internalValue = value
-      value !== oldValue && this.$emit('change', value)
+      keyboardLookupLastTime,
+      allItems,
+      classes,
+      computedItems,
+      counterValue,
+      directives,
+      dynamicHeight,
+      hasChips,
+      hasSlot,
+      isDirty,
+      listData,
+      staticList,
+      virtualizedItems,
+      menuCanShow,
+      $_menuProps: menuProps,
+      blur,
+      focus,
+      activateMenu,
+      clearableCallback,
+      closeConditional,
+      filterDuplicates,
+      findExistingIndex,
+      genChipSelection,
+      genCommaSelection,
+      genDefaultSlot,
+      genInput,
+      genList,
+      genListWithSlot,
+      genMenu,
+      genSelections,
+      genSlotSelection,
+      getMenuIndex,
+      getDisabled,
+      getText,
+      getValue,
+      onBlur,
+      onChipInput,
+      onClick,
+      onEnterDown,
+      onEscDown,
+      onKeyPress,
+      onKeyDown,
+      onMouseUp,
+      onScroll,
+      onTabDown,
+      selectItem,
+      setMenuIndex,
+      setSelectedItems,
+      setValue
     }
   }
 })
