@@ -432,7 +432,8 @@ export default defineComponent({
     function genMenu () {
       const propsData = { ...menuProps.value, activator: proxy?.$refs?.['input-slot'] }
 
-      const inheritedProps = Object.keys(VMenu.options.props)
+      const menuPropDefinitions = VMenu.options?.props ?? VMenu.props ?? {}
+      const inheritedProps = Object.keys(menuPropDefinitions)
 
       const deprecatedProps = Object.keys(attrs).reduce((acc, attr) => {
         if (inheritedProps.includes(camelize(attr))) acc.push(attr)
@@ -453,7 +454,7 @@ export default defineComponent({
         const separator = multiple ? '\n' : '\''
 
         const onlyBools = Object.keys(replacement).every(prop => {
-          const propType = VMenu.options.props[prop]
+          const propType = menuPropDefinitions[prop]
           const value = replacement[prop]
           return value === true || ((propType.type || propType) === Boolean && value === '')
         })
