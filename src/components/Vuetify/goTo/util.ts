@@ -1,4 +1,4 @@
-import Vue from 'vue'
+import type { ComponentPublicInstance } from 'vue'
 
 // Return target's cumulative offset from the top
 export function getOffset (target: any): number {
@@ -39,11 +39,15 @@ function type (el: any) {
 function $ (el: any): HTMLElement | null {
   if (typeof el === 'string') {
     return document.querySelector<HTMLElement>(el)
-  } else if (el && el._isVue) {
-    return (el as Vue).$el as HTMLElement
+  } else if (isComponentInstance(el)) {
+    return (el as ComponentPublicInstance).$el as HTMLElement
   } else if (el instanceof HTMLElement) {
     return el
   } else {
     return null
   }
+}
+
+function isComponentInstance (value: any): value is ComponentPublicInstance {
+  return Boolean(value && typeof value === 'object' && '$el' in value)
 }
