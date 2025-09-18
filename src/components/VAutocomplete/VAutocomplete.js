@@ -11,6 +11,8 @@ import { keyCodes } from '../../util/helpers'
 // Types
 import { defineComponent, ref, computed, watch } from 'vue'
 
+const menuPropsType = VSelect.options?.props?.menuProps?.type ?? VSelect.props?.menuProps?.type ?? [String, Array, Object]
+
 const defaultMenuProps = {
   ...VSelectMenuProps,
   offsetY: true,
@@ -43,7 +45,7 @@ export default defineComponent({
       default: undefined
     },
     menuProps: {
-      type: VSelect.options.props.menuProps.type,
+      type: menuPropsType,
       default: () => defaultMenuProps
     },
     autoSelectFirst: {
