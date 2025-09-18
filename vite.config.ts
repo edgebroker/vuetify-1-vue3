@@ -53,7 +53,8 @@ export default defineConfig({
     ]
   },
   define: {
-    __VUETIFY_VERSION__: JSON.stringify(process.env.npm_package_version)
+    __VUETIFY_VERSION__: JSON.stringify(process.env.npm_package_version),
+    __REQUIRED_VUE__: JSON.stringify(process.env.npm_package_dependencies_vue || '^3.0.0')
   },
   build: {
     lib: {
