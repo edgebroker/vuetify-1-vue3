@@ -2,12 +2,12 @@
   "name": "vuetify-1-vue3",
   "version": "0.0.1",
   "type": "module",
-  "main": "dist/vuetify.umd.js",
+  "main": "dist/vuetify.cjs",
   "module": "dist/vuetify.es.js",
   "exports": {
     ".": {
       "import": "./dist/vuetify.es.js",
-      "require": "./dist/vuetify.umd.js"
+      "require": "./dist/vuetify.cjs"
     },
     "./css": "./css/vuetify.css"
   },

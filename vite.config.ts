@@ -34,11 +34,25 @@ function vuetifyCssPlugin (): Plugin {
   }
 }
 
+function vuetifyCjsExportPlugin (): Plugin {
+  return {
+    name: 'vuetify-cjs-export',
+    generateBundle (_, bundle) {
+      const chunk = bundle['vuetify.cjs']
+
+      if (chunk && chunk.type === 'chunk') {
+        chunk.code += '\nmodule.exports = exports.default;\nObject.assign(module.exports, exports);\n'
+      }
+    }
+  }
+}
+
 export default defineConfig({
   plugins: [
     vue(),
     vueJsx(),
-    vuetifyCssPlugin()
+    vuetifyCssPlugin(),
+    vuetifyCjsExportPlugin()
   ],
   resolve: {
     alias: [
@@ -60,8 +74,18 @@ export default defineConfig({
     lib: {
       entry: resolve(__dirname, 'src/entry-lib.ts'),
       name: 'Vuetify',
-      fileName: (format) => `vuetify.${format}.js`,
-        formats: ['es', 'umd']
+      fileName: (format) => {
+        if (format === 'cjs') {
+          return 'vuetify.cjs'
+        }
+
+        if (format === 'umd') {
+          return 'vuetify.umd.js'
+        }
+
+        return `vuetify.${format}.js`
+      },
+      formats: ['es', 'umd', 'cjs']
     },
     rollupOptions: {
       external: ['vue'],
