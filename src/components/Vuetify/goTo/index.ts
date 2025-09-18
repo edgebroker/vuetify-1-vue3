@@ -3,15 +3,22 @@ import {
   getContainer,
   getOffset
 } from './util'
-import Vue from 'vue'
+import type { ComponentPublicInstance } from 'vue'
+import type { VuetifyApplication } from '../../../types'
 
-type GoToTarget = number | string | HTMLElement | Vue
+type GoToTarget = number | string | HTMLElement | ComponentPublicInstance
 interface GoToSettings {
-  container: string | HTMLElement | Vue
+  container: string | HTMLElement | ComponentPublicInstance
   duration: number
   offset: number
   easing: string | easingPatterns.EasingFunction
   appOffset: boolean
+}
+
+let application: VuetifyApplication | undefined
+
+export function setGoToApplication (app: VuetifyApplication): void {
+  application = app
 }
 
 export default function goTo (_target: GoToTarget, _settings: Partial<GoToSettings> = {}): Promise<number> {
@@ -25,12 +32,14 @@ export default function goTo (_target: GoToTarget, _settings: Partial<GoToSettin
   }
   const container = getContainer(settings.container)
 
-  if (settings.appOffset) {
+  const currentApplication = application
+
+  if (settings.appOffset && currentApplication) {
     const isDrawer = container.classList.contains('v-navigation-drawer')
     const isClipped = container.classList.contains('v-navigation-drawer--clipped')
 
-    settings.offset += Vue.prototype.$vuetify.application.bar
-    if (!isDrawer || isClipped) settings.offset += Vue.prototype.$vuetify.application.top
+    settings.offset += currentApplication.bar
+    if (!isDrawer || isClipped) settings.offset += currentApplication.top
   }
 
   const startTime = performance.now()

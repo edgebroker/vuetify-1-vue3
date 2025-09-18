@@ -1,4 +1,5 @@
-import OurVue from 'vue'
+import { App, Component, reactive } from 'vue'
+import { version as VueVersion } from 'vue'
 
 import useApplication from './composables/useApplication'
 import useBreakpoint from './composables/useBreakpoint'
@@ -6,80 +7,84 @@ import useTheme from './composables/useTheme'
 import useIcons from './composables/useIcons'
 import useOptions from './composables/useOptions'
 import useLang from './composables/useLang'
-import goTo from './goTo'
+import goTo, { setGoToApplication } from './goTo'
 
 // Utils
-import { consoleWarn, consoleError } from '../../util/console'
+import { consoleWarn } from '../../util/console'
 
 // Types
-import { VueConstructor } from 'vue/types'
-import { Vuetify as VuetifyPlugin, VuetifyUseOptions } from '../../types'
+import { ComponentOrPack, Vuetify as VuetifyPlugin, VuetifyUseOptions } from '../../types'
+
+const installedApps = new WeakSet<App>()
 
 const Vuetify: VuetifyPlugin = {
-  install (Vue, opts = {}) {
-    if ((this as any).installed) return
-    ;(this as any).installed = true
+  install (app, opts = {}) {
+    if (installedApps.has(app)) return
+    installedApps.add(app)
 
-    if (OurVue !== Vue) {
-      consoleError('Multiple instances of Vue detected\nSee https://github.com/vuetifyjs/vuetify/issues/4068\n\nIf you\'re seeing "$attrs is readonly", it\'s caused by this')
-    }
-
-    checkVueVersion(Vue)
+    checkVueVersion(app)
 
     const application = useApplication()
     const breakpoint = useBreakpoint(opts.breakpoint)
     const lang = useLang(opts.lang)
-
-    Vue.prototype.$vuetify = new Vue({
-      data: {
-        application,
-        breakpoint,
-        dark: false,
-        icons: useIcons(opts.iconfont, opts.icons),
-        lang,
-        options: useOptions(opts.options),
-        rtl: opts.rtl,
-        theme: useTheme(opts.theme)
-      },
-      methods: {
-        goTo,
-        t: lang.t.bind(lang)
-      }
+    const vuetify = reactive({
+      application,
+      breakpoint,
+      dark: false,
+      icons: useIcons(opts.iconfont, opts.icons),
+      lang,
+      options: useOptions(opts.options),
+      rtl: opts.rtl ?? false,
+      theme: useTheme(opts.theme),
+      goTo,
+      t: lang.t.bind(lang)
     })
+
+    setGoToApplication(application)
+
+    app.config.globalProperties.$vuetify = vuetify
 
     if (opts.directives) {
       for (const name in opts.directives) {
-        Vue.directive(name, opts.directives[name])
+        app.directive(name, opts.directives[name])
       }
     }
 
-    (function registerComponents (components: VuetifyUseOptions['components']) {
-      if (components) {
-        for (const key in components) {
-          const component = components[key]
-          if (component && !registerComponents(component.$_vuetify_subcomponents)) {
-            Vue.component(key, component as typeof Vue)
-          }
-        }
-        return true
-      }
-      return false
-    })(opts.components)
+    registerComponents(app, opts.components)
   },
   version: __VUETIFY_VERSION__
 }
 
-export function checkVueVersion (Vue: VueConstructor, requiredVue?: string) {
+function registerComponents (app: App, components?: VuetifyUseOptions['components']): boolean {
+  if (!components) return false
+
+  for (const key in components) {
+    const component = components[key]
+
+    if (!component) continue
+
+    const subcomponents = (component as ComponentOrPack).$_vuetify_subcomponents
+    if (subcomponents && registerComponents(app, subcomponents)) continue
+
+    if (typeof component === 'object' || typeof component === 'function') {
+      app.component(key, component as Component)
+    }
+  }
+
+  return true
+}
+
+export function checkVueVersion (app: App | { version: string }, requiredVue?: string) {
   const vueDep = requiredVue || __REQUIRED_VUE__
 
   const required = vueDep.split('.', 3).map(v => v.replace(/\D/g, '')).map(Number)
-  const actual = Vue.version.split('.', 3).map(n => parseInt(n, 10))
+  const version = (app.version || VueVersion).split('.', 3).map(n => parseInt(n, 10))
 
   // Simple semver caret range comparison
   const passes =
-    actual[0] === required[0] && // major matches
-    (actual[1] > required[1] || // minor is greater
-      (actual[1] === required[1] && actual[2] >= required[2]) // or minor is eq and patch is >=
+    version[0] === required[0] && // major matches
+    (version[1] > required[1] || // minor is greater
+      (version[1] === required[1] && version[2] >= required[2]) // or minor is eq and patch is >=
     )
 
   if (!passes) {
