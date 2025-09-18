@@ -41,7 +41,7 @@ function vuetifyCjsExportPlugin (): Plugin {
       const chunk = bundle['vuetify.cjs']
 
       if (chunk && chunk.type === 'chunk') {
-        chunk.code += '\nmodule.exports = exports.default;\nObject.assign(module.exports, exports);\n'
+        chunk.code += '\nconst __cjsExports = exports;\nconst __defaultExport = __cjsExports && __cjsExports.default;\nif (__defaultExport) {\n  module.exports = __defaultExport;\n  Object.defineProperty(module.exports, "__esModule", { value: true });\n  module.exports.default = __defaultExport;\n  const __descriptors = Object.getOwnPropertyDescriptors(__cjsExports);\n  const __names = Object.getOwnPropertyNames(__descriptors);\n  const __symbols = typeof Object.getOwnPropertySymbols === "function" ? Object.getOwnPropertySymbols(__descriptors) : [];\n  for (const __key of __names.concat(__symbols)) {\n    if (__key === "default") continue;\n    Object.defineProperty(module.exports, __key, __descriptors[__key]);\n  }\n}\n'
       }
     }
   }
