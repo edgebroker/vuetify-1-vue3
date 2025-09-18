@@ -1,24 +1,33 @@
 {
   "name": "vuetify-1-vue3",
   "version": "0.0.1",
-  "private": false,
-  "main": "dist/index.js",
-  "module": "dist/index.esm.js",
-  "types": "dist/index.d.ts",
   "type": "module",
+  "main": "dist/vuetify.umd.js",
+  "module": "dist/vuetify.es.js",
+  "exports": {
+    ".": {
+      "import": "./dist/vuetify.es.js",
+      "require": "./dist/vuetify.umd.js"
+    },
+    "./css": "./css/vuetify.css"
+  },
+  "files": [
+    "dist",
+    "css"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "serve": "vite preview"
+    "serve": "vite preview",
+    "typecheck": "vue-tsc --noEmit"
   },
-  "dependencies": {
-    "vue": "^3.4.21"
+  "peerDependencies": {
+    "vue": "^3.5.0"
   },
   "devDependencies": {
-    "@types/node": "^24.5.2",
-    "@vitejs/plugin-vue": "^5.0.4",
+    "@vitejs/plugin-vue": "^5.2.4",
     "@vitejs/plugin-vue-jsx": "^3.1.0",
-    "typescript": "^5.3.3",
-    "vite": "^5.0.12"
+    "vite": "^5.4.0",
+    "typescript": "^5.0.0"
   }
 }

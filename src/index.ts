@@ -1,27 +1,32 @@
 import "@/css/vuetify.css"
-import VuetifyComponent from './components/Vuetify'
 import * as components from './components'
 import directives from './directives'
-import type { App, Plugin } from 'vue'
-import { Vuetify as VuetifyPlugin, VuetifyUseOptions } from './types'
+import type {App} from 'vue'
+import {Vuetify as VuetifyPlugin, VuetifyUseOptions} from './types'
 
 const Vuetify: VuetifyPlugin = {
-  install (app: App, args?: VuetifyUseOptions): void {
-    app.use(VuetifyComponent as unknown as Plugin, {
-      components,
-      directives,
-      ...args
-    })
-  },
-  version: __VUETIFY_VERSION__
-}
+    install(app: App, args?: VuetifyUseOptions): void {
+        console.log("[Vuetify-1-vue3] install() called")
+        for (const compKey in components) {
+            const comp = (components as Record<string, any>)[compKey]
+            if (comp && comp.name) {
+                console.log("[Vuetify-1-vue3] Registering component:", comp.name)
+                app.component(comp.name, comp)
+            }
+        }
 
-if (typeof window !== 'undefined' && window.Vue?.use) {
-  window.Vue.use(Vuetify as unknown as Plugin)
+        for (const name in directives) {
+            const directive = (directives as Record<string, any>)[name]
+            if (directive) {
+                console.log("[Vuetify-1-vue3] Registering directive:", name)
+                app.directive(name, directive)
+            }
+        }
+    },
+    version: __VUETIFY_VERSION__
 }
-
-export default Vuetify
-export type { ComponentOrPack, Vuetify, VuetifyUseOptions } from './types'
+export type {ComponentOrPack, VuetifyUseOptions} from './types'
 export * from './components'
 export * from './directives'
 export * from './util/helpers'
+export default Vuetify;
