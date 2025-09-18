@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { fileURLToPath, URL } from 'node:url'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 
-const projectRoot = fileURLToPath(new URL('.', import.meta.url))
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const projectRoot = __dirname
 
 function vuetifyCssPlugin (): Plugin {
   const cssPath = resolve(projectRoot, 'css/vuetify.css')
@@ -43,11 +44,11 @@ export default defineConfig({
     alias: [
       {
         find: '@/css',
-        replacement: fileURLToPath(new URL('./css', import.meta.url))
+        replacement: resolve(__dirname, 'css')
       },
       {
         find: '@',
-        replacement: fileURLToPath(new URL('./src', import.meta.url))
+        replacement: resolve(__dirname, 'src')
       }
     ]
   },
@@ -56,9 +57,10 @@ export default defineConfig({
   },
   build: {
     lib: {
-      entry: fileURLToPath(new URL('./src/entry-lib.ts', import.meta.url)),
+      entry: resolve(__dirname, 'src/entry-lib.ts'),
       name: 'Vuetify',
-      fileName: (format) => `vuetify.${format}.js`
+      fileName: (format) => `vuetify.${format}.js`,
+        formats: ['es', 'umd']
     },
     rollupOptions: {
       external: ['vue'],

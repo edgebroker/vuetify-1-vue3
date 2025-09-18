@@ -22,3 +22,6 @@ if (typeof window !== 'undefined' && window.Vue?.use) {
 
 export default Vuetify
 export type { ComponentOrPack, Vuetify, VuetifyUseOptions } from './types'
+export * from './components'
+export * from './directives'
+export * from './util/helpers'
